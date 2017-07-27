@@ -152,7 +152,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   {
      irDecoder.decode();
 
-     /*if (irDecoder.value == 0) { //As the animation interrupts IR recieving, you have to press the same button two times in a row
+     if (irDecoder.value == 0) { //As the animation interrupts IR recieving, you have to press the same button two times in a row
        showIRisListening();
        for (int retryCnt = 0; retryCnt < 20; retryCnt++) { //I honestly have absolutely **NO IDEA** why this works, but it works like a charm!
         irrecv.disableIRIn();
@@ -165,8 +165,8 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
           irValue = irDecoder.value;
         }
        }
-     }*/
-     irValue = irDecoder.value;
+     }
+     //irValue = irDecoder.value;
 
      /**if (irDecoder.value != 0xFFFFFFFF)
      {
@@ -236,7 +236,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 
   last = volume; //Records current volume for next pass
 
-  delay(90);     //Paces visuals so they aren't too fast to be enjoyable
+  delay(30);     //Paces visuals so they aren't too fast to be enjoyable
 }
 
 //////////</Standard Functions>
