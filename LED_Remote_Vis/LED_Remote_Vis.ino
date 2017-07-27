@@ -11,6 +11,7 @@
 ///////             
 /////// 26.07.2017: - Initial testing and refining
 ///////             - Replacing physical button presses with IR remote. Works, but just in theory.
+///////             - Replacing the real sound input with a random number.
 ///////             - Adding workaround for IR beeing 0 after NeoPixel's show() command
 ///////             ---> IR just works now because of a dirty hack. Better than nothing!
 ///////             
@@ -18,6 +19,9 @@
 ///////             - Added optical "alerts" if recieved valid IR
 ///////             - Refined workaround for IR
 ///////             ---> IR now works relatively good and has fancy alerts. Still looking for a real "clean" fix though.
+///////             ---> NOTE: This still uses no valid sound input, just random numbers. Real code comes after I have everything at hand.
+///////             
+///////             
 ///////             
 
 
