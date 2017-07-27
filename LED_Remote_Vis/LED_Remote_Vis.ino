@@ -236,7 +236,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 
   last = volume; //Records current volume for next pass
 
-  delay(100);     //Paces visuals so they aren't too fast to be enjoyable
+  delay(90);     //Paces visuals so they aren't too fast to be enjoyable
 }
 
 //////////</Standard Functions>
