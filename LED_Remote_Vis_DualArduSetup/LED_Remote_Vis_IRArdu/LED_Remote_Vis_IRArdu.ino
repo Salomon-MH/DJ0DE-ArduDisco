@@ -1,5 +1,4 @@
-//Basic visualizer code by Michael Bartlett
-//Extended by Daniel Salomon
+//Code by Daniel Salomon
 
 ///// Changelog:
 
