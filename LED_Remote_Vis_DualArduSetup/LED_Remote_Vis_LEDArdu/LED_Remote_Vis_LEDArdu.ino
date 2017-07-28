@@ -841,7 +841,7 @@ void decodeInput() {
 	for (int i = 0; i < INPUT_COUNT; i++) { //Decode the input.
 		if (recevInput[i])
 		{
-			decodedInput += 2**i; //Adds the equivalent number to the result. Pin1: +1, Pin2: +2, Pin3: +4, ...
+			decodedInput += pow(2, i); //Adds the equivalent number to the result. Pin1: +1, Pin2: +2, Pin3: +4, ...
 		}
 	} 
 	
