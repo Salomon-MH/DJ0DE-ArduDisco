@@ -1,5 +1,5 @@
-//Basic visualizer code by Michael Bartlett
-//Extended by Daniel Salomon
+//Basic LED visualizer code by Michael Bartlett
+//Extended, changed and optimized by Daniel Salomon (github.com/salomon-mh)
 
 ///// Changelog:
 
@@ -22,6 +22,9 @@
 ///////             ---> NOTE: This still uses no valid sound input, just random numbers. Real code comes after I have everything at hand.
 ///////             
 /////// 28.07.2017: - Starting Code for dual Arduino setup 
+///////             - Removed unneccessary code
+///////             - Added decoding method
+///////             - Untested, as I do not own two Arduinos yet. Use with caution. Dont forget to connect grounds between the Arduinos!
 ///////             
 
 
@@ -30,29 +33,24 @@
 #ifdef __AVR__
 //#include <avr/power.h>   //Includes the library for power reduction registers if your chip supports them. 
                          //More info: http://www.nongnu.org/avr-libc/user-manual/group__avr__power.htlm
-#include <IRLibAll.h>     //Includes the library for infrared receiving
 #endif
 
 //////////Constants
 //PINs
 #define LED_PIN   2  //Pin for the pixel strand. Does not have to be analog.
 #define AUDIO_PIN A0  //Pin for the envelope of the sound detector
-#define IR_PIN    3  //Pin for the Infrared reciever
-//#define KNOB_PIN  A1  //Pin for the trimpot 10K
-//#define BUTTON_1  6   //Button 1 cycles color palettes
-//#define BUTTON_2  5   //Button 2 cycles visualization modes
-//#define BUTTON_3  4   //Button 3 toggles shuffle mode (automated changing of color and visual)
 
-//IR HEX values
-uint32_t IR_CHANGEVISUAL = 0x20DF04FB;//0x20DF04FB; //Example HEX value, change to actual values!
-uint32_t IR_CHANGECOLOR = 0x20DF847B;//0x20DF847B;
-uint32_t IR_CHANGEBRIGHTNESS = 0x20DFF906;//0x20DFF906;
+#define INPUT_COUNT 3  //Reading the values in the code has to be changed too when changing this!
+#define INPUT_PIN1  5  //The input pins from IRArdu to control the lights
+#define INPUT_PIN2  6  //WARNING: DO NOT FORGET TO CONNECT GROUNDS BETWEEN THE ARDUINOS.
+#define INPUT_PIN3  7
 
 
 //Others
 #define LED_TOTAL 8  //Change this to the number of LEDs in your strand.
 #define LED_HALF  LED_TOTAL/2
-#define KEYRECIEVE_NOTIFICATION_TIME 500 //How long the white flash is shown after IR detected.
+#define KEYRECIEVE_NOTIFICATION_TIME 500 //How long the white flash is shown after IR detected. 0 completely disables this fuction.
+#define SERIALDEBUGGING 0 //Should serial send debugging information? 0=FALSE 1=TRUE
 #define VISUALS   7 //Ammount of effects existing
 
 //////////<Globals>
@@ -60,12 +58,6 @@ uint32_t IR_CHANGEBRIGHTNESS = 0x20DFF906;//0x20DFF906;
 //  need to be accessed by several functions in one pass, so they need to be global.
 
 Adafruit_NeoPixel strand = Adafruit_NeoPixel(LED_TOTAL, LED_PIN, NEO_GRB + NEO_KHZ800);  //LED strand object by NeoPixel library
-
-
-//Infrared
-IRrecv irrecv(IR_PIN);
-IRdecode irDecoder;
-uint32_t irValue;
 
 //LED Color
 uint16_t gradient = 0; //Used to iterate and loop through each color palette gradually
@@ -95,6 +87,10 @@ float maxVol = 15;     //Holds the largest volume recorded thus far to proportio
 float avgVol = 0;      //Holds the "average" volume-level to proportionally adjust the visual experience.
 float avgBump = 0;     //Holds the "average" volume-change to trigger a "bump."
 bool bump = false;     //Used to pass if there was a "bump" in volume
+
+//Temporary storage for input signal
+int recevInput[3];
+int decodedInput = 0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,52 +128,27 @@ void setup() {    //Like it's named, this gets ran before any other function.
 
   Serial.begin(9600); //Sets data rate for serial data transmission.
 
-  //Defines the buttons pins to be input.
-  //pinMode(BUTTON_1, INPUT); pinMode(BUTTON_2, INPUT); pinMode(BUTTON_3, INPUT);
+  //Defines the input pins to be input.
+  pinMode(INPUT_PIN1, INPUT);
+  pinMode(INPUT_PIN2, INPUT);
+  pinMode(INPUT_PIN3, INPUT);
 
-  //Write a "HIGH" value to the button pins.
-  //digitalWrite(BUTTON_1, HIGH); digitalWrite(BUTTON_2, HIGH); digitalWrite(BUTTON_3, HIGH);
+  //Write a "LOW" value to the input pins.
+  digitalWrite(INPUT_PIN1, LOW);
+  digitalWrite(INPUT_PIN2, LOW);
+  digitalWrite(INPUT_PIN3, LOW);
   
   strand.begin(); //Initialize the LED strand object.
   strand.show();  //Show a blank strand, just to get the LED's ready for use.
 
-  irrecv.enableIRIn(); // Start the infrared receiver
 }
 
 
 void loop() {  //This is where the magic happens. This loop produces each frame of the visual.
 
-  irValue = 0;
-  if (irrecv.getResults())
-  {
-     irDecoder.decode();
-
-     if (irDecoder.value == 0) { //As the animation interrupts IR recieving, you have to press the same button two times in a row
-       showIRisListening();
-       for (int retryCnt = 0; retryCnt < 20; retryCnt++) { //I honestly have absolutely **NO IDEA** why this works, but it works like a charm!
-        irrecv.disableIRIn();
-        irrecv.enableIRIn();
-        delay(200);
-        irrecv.getResults();
-        irDecoder.decode();
-        if (irDecoder.value == IR_CHANGEVISUAL || irDecoder.value == IR_CHANGECOLOR || irDecoder.value == IR_CHANGEBRIGHTNESS) {
-          retryCnt = 20;
-          irValue = irDecoder.value;
-        }
-       }
-     }
-     //irValue = irDecoder.value;
-
-     /**if (irDecoder.value != 0xFFFFFFFF)
-     {
-      irValue = irDecoder.value; //Detect the HEX results recieved.
-      //Serial.println(irValue, HEX);
-     }**/
-     
-     irrecv.enableIRIn(); // Receive the next infrared value
-  } //irResults.value should be IR_CHANGEBRIGHTNESS, IR_CHANGECOLOR or IR_CHANGEVISUAL now, otherwise nothing should happen.
-  
   //volume = analogRead(AUDIO_PIN);       //Record the volume level from the sound detector
+  
+  decodeInput(); //Decodes the input from binary to integer
 
   //"Virtual" music for testing.
   volume = 12 + random(15);
@@ -709,9 +680,9 @@ void CyclePalette() {
 
   //IMPORTANT: Delete this whole if-block if you didn't use buttons//////////////////////////////////
 
-  //If infrared is recieved and matches with IR_CHANGECOLOR, action is performed
-  if (irValue == IR_CHANGECOLOR){ //!digitalRead(BUTTON_1)) {
-    //Serial.println("Changing Palette!");
+  //If the binary number 1 is recieved via inputs, action is performed
+  if (decodedInput == 1){
+    if (SERIALDEBUGGING) Serial.println("Changing Palette!");
     showKeyRecieved();
     if (isStaticLight) {
     switch (staticState)
@@ -767,8 +738,8 @@ void CycleVisual() {
 
   //IMPORTANT: Delete this whole if-block if you didn't use buttons//////////////////////////////////
   //(or change it)
-  if (irValue == IR_CHANGEVISUAL) {//!digitalRead(BUTTON_2)) {
-    //Serial.println("Changing Visual!");
+  if (decodedInput == 2) {
+    if (SERIALDEBUGGING) Serial.println("Changing Visual!");
     showKeyRecieved();
     visual++;     //The purpose of this button: change the visual mode
     //Serial.println(visual);
@@ -819,41 +790,62 @@ void CycleVisual() {
 void CycleBrightness() {
 
   //If infrared is recieved and matches with IR_CHANGEBRIGHTNESS, action is performed
-  if (irValue == IR_CHANGEBRIGHTNESS){
-    //Serial.println("Changing Brightness!");
+  if (decodedInput == 3){
+    if (SERIALDEBUGGING) Serial.println("Changing Brightness!");
     showKeyRecieved();
     switch ((int)(knob*10)) {
-  case 10: knob = 0.8; break;
-  case 8: knob = 0.6; break;
-  case 6: knob = 0.4; break;
-  case 4: knob = 0.2; break;
-  case 2: knob = 0.0; break;
-  case 0: knob = 1; break;
-  default: knob = 1.0; break;
-  }
+		case 10: knob = 0.8; break;
+		case 8: knob = 0.6; break;
+		case 6: knob = 0.4; break;
+		case 4: knob = 0.2; break;
+		case 2: knob = 0.0; break;
+		case 0: knob = 1; break;
+		default: knob = 1.0; break;
+	}
   }
 }
 
 
 // VISUAL EFFECT TO SHOW THAT A KEYSTROKE IS NOTICED.
 void showKeyRecieved() {
-  for (int i = 1; i < strand.numPixels()-1; i++) {
-    strand.setPixelColor(i, strand.Color(0,0,0));
-  }
-  strand.setPixelColor(0, strand.Color(0,255,0));
-  strand.setPixelColor(strand.numPixels()-1, strand.Color(0,255,0));
-  strand.show();
-  delay(KEYRECIEVE_NOTIFICATION_TIME);
+	if (KEYRECIEVE_NOTIFICATION_TIME != 0)
+	{
+		for (int i = 1; i < strand.numPixels()-1; i++) {
+			strand.setPixelColor(i, strand.Color(0,0,0));
+		}
+		strand.setPixelColor(0, strand.Color(0,255,0));
+		strand.setPixelColor(strand.numPixels()-1, strand.Color(0,255,0));
+		strand.show();
+		delay(KEYRECIEVE_NOTIFICATION_TIME);
+	}
+
 }
 
-// VISUAL EFFECT TO SHOW THAT LISTENING TO IR STARTED
-void showIRisListening() {
+// VISUAL EFFECT TO SHOW THAT LISTENING TO IR STARTED (LEGACY AND NO LONGER NEEDED)
+/*void showIRisListening() {
   for (int i = 1; i < strand.numPixels()-1; i++) {
     strand.setPixelColor(i, strand.Color(0,0,0));
   }
   strand.setPixelColor(0, strand.Color(60,0,0));
   strand.setPixelColor(strand.numPixels()-1, strand.Color(60,0,0));
   strand.show();
+}*/
+
+// Methods to decode the input given by IRArdu
+void decodeInput() {
+	recevInput[0] = digitalRead(INPUT_PIN1); //Read the values from the PINs.
+    recevInput[1] = digitalRead(INPUT_PIN2);
+    recevInput[2] = digitalRead(INPUT_PIN3); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
+	
+	decodedInput = 0;
+	for (int i = 0; i < INPUT_COUNT; i++) { //Decode the input.
+		if (recevInput[i])
+		{
+			decodedInput += 2**i; //Adds the equivalent number to the result. Pin1: +1, Pin2: +2, Pin3: +4, ...
+		}
+	} 
+	
+	if (SERIALDEBUGGING) {Serial.print("Decoded Input: "); Serial.println(decodedInput);}
 }
 
 
