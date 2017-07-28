@@ -21,7 +21,7 @@
 ///////             ---> IR now works relatively good and has fancy alerts. Still looking for a real "clean" fix though.
 ///////             ---> NOTE: This still uses no valid sound input, just random numbers. Real code comes after I have everything at hand.
 ///////             
-///////             
+/////// 28.07.2017: - Starting Code for dual Arduino setup 
 ///////             
 
 
