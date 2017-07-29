@@ -25,6 +25,9 @@
 ///////             - Removed unneccessary code
 ///////             - Added decoding method
 ///////             - Untested, as I do not own two Arduinos yet. Use with caution. Dont forget to connect grounds between the Arduinos!
+///////
+/////// 29.07.2017: - Changed code for 5 pin decoding
+///////             - Added microphone support
 ///////             
 
 

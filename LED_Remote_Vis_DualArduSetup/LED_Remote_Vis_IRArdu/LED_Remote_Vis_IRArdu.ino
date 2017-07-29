@@ -5,7 +5,7 @@
 /////// 28.07.2017: - First testing
 ///////             - Binary encoding seems to work perfectly fine
 ///////             
-///////             
+/////// 29.07.2017: - Changed output to 5 pins            
 
 
 //////////Libraries
@@ -14,9 +14,11 @@
 //////////Constants
 //PINs
 #define IR_PIN    3  //Pin for the Infrared reciever
-#define OUT_PIN1  5  //The output pins
-#define OUT_PIN2  6
-#define OUT_PIN3  7
+#define OUT_PIN1  8  //The output pins
+#define OUT_PIN2  9
+#define OUT_PIN3  10
+#define OUT_PIN4  11
+#define OUT_PIN5  12
 
 //Digital output timeout time
 #define OUTPUT_TIME 70 //70 is a bit more than 2x the delay in loop() for the LED Arduino. Should be timeout enough!
@@ -42,11 +44,15 @@ void setup() {    //Like it's named, this gets ran before any other function.
   pinMode(OUT_PIN1, OUTPUT);
   pinMode(OUT_PIN2, OUTPUT);
   pinMode(OUT_PIN3, OUTPUT);
+  pinMode(OUT_PIN4, OUTPUT);
+  pinMode(OUT_PIN5, OUTPUT);
 
   //Write a "LOW" value to the pins to initialize.
   digitalWrite(OUT_PIN1, LOW);
   digitalWrite(OUT_PIN2, LOW);
   digitalWrite(OUT_PIN3, LOW);
+  digitalWrite(OUT_PIN4, LOW);
+  digitalWrite(OUT_PIN5, LOW);
   
   irrecv.enableIRIn(); // Start the infrared receiver
 }
@@ -80,21 +86,23 @@ void encodeSignal() {
   else if(irValue == IR_signal_2) recievedValue = 2;
   else if(irValue == IR_signal_3) recievedValue = 3;
   
-  Serial.println(recievedValue);
+  //Serial.println(recievedValue);
 	if (recievedValue != -1) {
 		encodeSignal_helper(recievedValue);
 	}
 }
 
 void encodeSignal_helper(int value) {
-	int output[3];
-	for (int i = 0; i < 3; i++) {
+	int output[5];
+	for (int i = 0; i < 5; i++) {
 		output[i] = value%2;
 		value = value/2;
 	} //if value=1 output is 100, for 2 it is 010, for 3 it is 110 etc.
 	if (output[0]) digitalWrite(OUT_PIN1, HIGH);
   if (output[1]) digitalWrite(OUT_PIN2, HIGH);
   if (output[2]) digitalWrite(OUT_PIN3, HIGH);
+  if (output[3]) digitalWrite(OUT_PIN4, HIGH);
+  if (output[4]) digitalWrite(OUT_PIN5, HIGH);
 }
 
 void resetOutput() {
@@ -102,6 +110,8 @@ void resetOutput() {
 	  digitalWrite(OUT_PIN1, LOW);
     digitalWrite(OUT_PIN2, LOW);
     digitalWrite(OUT_PIN3, LOW);
+    digitalWrite(OUT_PIN4, LOW);
+    digitalWrite(OUT_PIN5, LOW);
 }
 
 //////////</Standard Functions>
