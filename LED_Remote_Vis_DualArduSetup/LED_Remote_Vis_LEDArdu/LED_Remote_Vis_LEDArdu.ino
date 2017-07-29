@@ -38,19 +38,21 @@
 //////////Constants
 //PINs
 #define LED_PIN   2  //Pin for the pixel strand. Does not have to be analog.
-#define AUDIO_PIN A0  //Pin for the envelope of the sound detector
+#define AUDIO_PIN 7  //Pin for the envelope of the sound detector
 
-#define INPUT_COUNT 3  //Reading the values in the code has to be changed too when changing this!
-#define INPUT_PIN1  5  //The input pins from IRArdu to control the lights
-#define INPUT_PIN2  6  //WARNING: DO NOT FORGET TO CONNECT GROUNDS BETWEEN THE ARDUINOS.
-#define INPUT_PIN3  7
-
+#define INPUT_COUNT 5  //How many wires are conected for transmitting? Reading the values in the code has to be changed too when changing this!
+#define INPUT_PIN1  8  //The input pins from IRArdu to control the lights
+#define INPUT_PIN2  9  //WARNING: DO NOT FORGET TO CONNECT GROUNDS BETWEEN THE ARDUINOS.
+#define INPUT_PIN3  10
+#define INPUT_PIN4  11
+#define INPUT_PIN5  12
 
 //Others
 #define LED_TOTAL 8  //Change this to the number of LEDs in your strand.
 #define LED_HALF  LED_TOTAL/2
 #define KEYRECIEVE_NOTIFICATION_TIME 500 //How long the white flash is shown after IR detected. 0 completely disables this fuction.
 #define SERIALDEBUGGING 0 //Should serial send debugging information? 0=FALSE 1=TRUE
+#define AUDIO_SAMLPING 255 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
 #define VISUALS   7 //Ammount of effects existing
 
 //////////<Globals>
@@ -89,7 +91,7 @@ float avgBump = 0;     //Holds the "average" volume-change to trigger a "bump."
 bool bump = false;     //Used to pass if there was a "bump" in volume
 
 //Temporary storage for input signal
-int recevInput[3];
+int recevInput[INPUT_COUNT];
 int decodedInput = 0;
 
 
@@ -132,11 +134,15 @@ void setup() {    //Like it's named, this gets ran before any other function.
   pinMode(INPUT_PIN1, INPUT);
   pinMode(INPUT_PIN2, INPUT);
   pinMode(INPUT_PIN3, INPUT);
+  pinMode(INPUT_PIN4, INPUT);
+  pinMode(INPUT_PIN5, INPUT);
 
   //Write a "LOW" value to the input pins.
   digitalWrite(INPUT_PIN1, LOW);
   digitalWrite(INPUT_PIN2, LOW);
   digitalWrite(INPUT_PIN3, LOW);
+  digitalWrite(INPUT_PIN4, LOW);
+  digitalWrite(INPUT_PIN5, LOW);
   
   strand.begin(); //Initialize the LED strand object.
   strand.show();  //Show a blank strand, just to get the LED's ready for use.
@@ -146,12 +152,21 @@ void setup() {    //Like it's named, this gets ran before any other function.
 
 void loop() {  //This is where the magic happens. This loop produces each frame of the visual.
 
-  //volume = analogRead(AUDIO_PIN);       //Record the volume level from the sound detector
-  
   decodeInput(); //Decodes the input from binary to integer
 
+  //Record the volume level from the sound detector
+  volume = 0;
+  int volumetickcnt = 0;
+  while(!digitalRead(AUDIO_PIN) || volumetickcnt < AUDIO_SAMLPING) {
+    if(volume < AUDIO_SAMLPING && !digitalRead(AUDIO_PIN)) {
+      volume++;
+    } //else break;
+    volumetickcnt++;
+  }
+  //Serial.println(volume);
+  
   //"Virtual" music for testing.
-  volume = 12 + random(15);
+  //volume = 12 + random(15);
   
   //knob = analogRead(KNOB_PIN) / 1023.0; //Record how far the trimpot is twisted
   //knob's default value is 1 now. Value of knob is defined by CycleBrightness()!!!
@@ -834,9 +849,11 @@ void showKeyRecieved() {
 // Methods to decode the input given by IRArdu
 void decodeInput() {
 	recevInput[0] = digitalRead(INPUT_PIN1); //Read the values from the PINs.
-    recevInput[1] = digitalRead(INPUT_PIN2);
-    recevInput[2] = digitalRead(INPUT_PIN3); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
-	
+  recevInput[1] = digitalRead(INPUT_PIN2);
+  recevInput[2] = digitalRead(INPUT_PIN3);
+	recevInput[3] = digitalRead(INPUT_PIN4);
+  recevInput[4] = digitalRead(INPUT_PIN5); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
+  
 	decodedInput = 0;
 	for (int i = 0; i < INPUT_COUNT; i++) { //Decode the input.
 		if (recevInput[i])

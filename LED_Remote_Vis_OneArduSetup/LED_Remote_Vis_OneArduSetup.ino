@@ -36,7 +36,7 @@
 //////////Constants
 //PINs
 #define LED_PIN   2  //Pin for the pixel strand. Does not have to be analog.
-#define AUDIO_PIN A0  //Pin for the envelope of the sound detector
+#define AUDIO_PIN 7  //Pin for the envelope of the sound detector
 #define IR_PIN    3  //Pin for the Infrared reciever
 //#define KNOB_PIN  A1  //Pin for the trimpot 10K
 //#define BUTTON_1  6   //Button 1 cycles color palettes
@@ -53,6 +53,7 @@ uint32_t IR_CHANGEBRIGHTNESS = 0x20DFF906;//0x20DFF906;
 #define LED_TOTAL 8  //Change this to the number of LEDs in your strand.
 #define LED_HALF  LED_TOTAL/2
 #define KEYRECIEVE_NOTIFICATION_TIME 500 //How long the white flash is shown after IR detected.
+#define AUDIO_SAMLPING 255 //Audio sampling rate
 #define VISUALS   7 //Ammount of effects existing
 
 //////////<Globals>
@@ -89,7 +90,7 @@ uint8_t staticState = 0; //Value for current color state for static light.
 uint16_t thresholds[] = {1529, 1019, 764, 764, 764, 1274, 764};
 
 //Sound
-uint8_t volume = 0;    //Holds the volume level read from the sound detector.
+uint16_t volume = 0;    //Holds the volume level read from the sound detector.
 uint8_t last = 0;      //Holds the value of volume from the previous loop() pass.
 float maxVol = 15;     //Holds the largest volume recorded thus far to proportionally adjust the visual's responsiveness.
 float avgVol = 0;      //Holds the "average" volume-level to proportionally adjust the visual experience.
@@ -178,9 +179,17 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   } //irResults.value should be IR_CHANGEBRIGHTNESS, IR_CHANGECOLOR or IR_CHANGEVISUAL now, otherwise nothing should happen.
   
   //volume = analogRead(AUDIO_PIN);       //Record the volume level from the sound detector
-
+  volume = 0;
+  int volumetickcnt = 0;
+  while(!digitalRead(AUDIO_PIN) || volumetickcnt < AUDIO_SAMLPING) {
+    if(volume < AUDIO_SAMLPING && !digitalRead(AUDIO_PIN)) {
+      volume++;
+    } //else break;
+    volumetickcnt++;
+  }
+  //Serial.println(volume);
   //"Virtual" music for testing.
-  volume = 12 + random(15);
+  //volume = 12 + random(15);
   
   //knob = analogRead(KNOB_PIN) / 1023.0; //Record how far the trimpot is twisted
   //knob's default value is 1 now. Value of knob is defined by CycleBrightness()!!!
@@ -188,10 +197,10 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   //Sets a threshold for volume.
   //  In practice I've found noise can get up to 15, so if it's lower, the visual thinks it's silent.
   //  Also if the volume is less than average volume / 2 (essentially an average with 0), it's considered silent.
-  if (volume < avgVol / 2.0 || volume < 15) volume = 0;
-
+  if (volume < avgVol / 2.0 || volume < 0) volume = 0;  
   else avgVol = (avgVol + volume) / 2.0; //If non-zeo, take an "average" of volumes.
 
+  
   //If the current volume is larger than the loudest value recorded, overwrite
   if (volume > maxVol) maxVol = volume;
 
