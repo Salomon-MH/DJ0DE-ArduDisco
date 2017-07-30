@@ -178,7 +178,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
      irrecv.enableIRIn(); // Receive the next infrared value
   } //irResults.value should be IR_CHANGEBRIGHTNESS, IR_CHANGECOLOR or IR_CHANGEVISUAL now, otherwise nothing should happen.
   
-  //volume = analogRead(AUDIO_PIN);       //Record the volume level from the sound detector
+  //Record the volume level from the sound detector
   volume = 0;
   int volumetickcnt = 0;
   while(!digitalRead(AUDIO_PIN) || volumetickcnt < AUDIO_SAMLPING) {

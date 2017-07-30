@@ -45,16 +45,16 @@
 
 #define INPUT_COUNT 5  //How many wires are conected for transmitting? Reading the values in the code has to be changed too when changing this!
 #define INPUT_PIN1  8  //The input pins from IRArdu to control the lights
-#define INPUT_PIN2  9  //WARNING: DO NOT FORGET TO CONNECT GROUNDS BETWEEN THE ARDUINOS.
-#define INPUT_PIN3  10
+#define INPUT_PIN2  10  //WARNING: DO NOT FORGET TO CONNECT GROUNDS BETWEEN THE ARDUINOS.
+#define INPUT_PIN3  13
 #define INPUT_PIN4  11
 #define INPUT_PIN5  12
 
 //Others
 #define LED_TOTAL 8  //Change this to the number of LEDs in your strand.
 #define LED_HALF  LED_TOTAL/2
-#define KEYRECIEVE_NOTIFICATION_TIME 500 //How long the white flash is shown after IR detected. 0 completely disables this fuction.
-#define SERIALDEBUGGING 0 //Should serial send debugging information? 0=FALSE 1=TRUE
+#define KEYRECIEVE_NOTIFICATION_TIME 100 //How long the white flash is shown after IR detected. 0 completely disables this fuction.
+#define SERIALDEBUGGING 1 //Should serial send debugging information? 0=FALSE 1=TRUE
 #define AUDIO_SAMLPING 255 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
 #define VISUALS   7 //Ammount of effects existing
 
@@ -70,7 +70,7 @@ uint8_t palette = 0;  //Holds the current color palette.
 uint8_t visual = 0;   //Holds the current visual being displayed.
 float shuffleTime = 0;  //Holds how many seconds of runtime ago the last shuffle was (if shuffle mode is on).
 bool shuffle = false;  //Toggles shuffle mode.
-double knob = 1;//1023.0;   //Holds the percentage of how twisted the trimpot is. Used for adjusting the max brightness.
+double knob = 0;   //Used for adjusting the max brightness.
 bool isStaticLight = false; //Different Color behavior for static light.
 uint8_t staticRed = 255; //Values for color for static light.
 uint8_t staticGreen = 255;
@@ -95,7 +95,7 @@ bool bump = false;     //Used to pass if there was a "bump" in volume
 
 //Temporary storage for input signal
 int recevInput[INPUT_COUNT];
-int decodedInput = 0;
+uint16_t decodedInput = 0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,11 +141,11 @@ void setup() {    //Like it's named, this gets ran before any other function.
   pinMode(INPUT_PIN5, INPUT);
 
   //Write a "LOW" value to the input pins.
-  digitalWrite(INPUT_PIN1, LOW);
+  /*digitalWrite(INPUT_PIN1, LOW);
   digitalWrite(INPUT_PIN2, LOW);
   digitalWrite(INPUT_PIN3, LOW);
   digitalWrite(INPUT_PIN4, LOW);
-  digitalWrite(INPUT_PIN5, LOW);
+  digitalWrite(INPUT_PIN5, LOW);*/
   
   strand.begin(); //Initialize the LED strand object.
   strand.show();  //Show a blank strand, just to get the LED's ready for use.
@@ -699,7 +699,7 @@ void CyclePalette() {
   //IMPORTANT: Delete this whole if-block if you didn't use buttons//////////////////////////////////
 
   //If the binary number 1 is recieved via inputs, action is performed
-  if (decodedInput == 1){
+  if (decodedInput == 2){
     if (SERIALDEBUGGING) Serial.println("Changing Palette!");
     showKeyRecieved();
     if (isStaticLight) {
@@ -756,7 +756,7 @@ void CycleVisual() {
 
   //IMPORTANT: Delete this whole if-block if you didn't use buttons//////////////////////////////////
   //(or change it)
-  if (decodedInput == 2) {
+  if (decodedInput == 1) {
     if (SERIALDEBUGGING) Serial.println("Changing Visual!");
     showKeyRecieved();
     visual++;     //The purpose of this button: change the visual mode
@@ -821,6 +821,11 @@ void CycleBrightness() {
 		default: knob = 1.0; break;
 	}
   }
+  if (decodedInput == 7) {
+    showKeyRecieved();
+    if(knob == 0) knob = 1;
+    else knob = 0;
+  }
 }
 
 
@@ -835,6 +840,10 @@ void showKeyRecieved() {
 		strand.setPixelColor(strand.numPixels()-1, strand.Color(0,255,0));
 		strand.show();
 		delay(KEYRECIEVE_NOTIFICATION_TIME);
+    for (int i = 0; i < strand.numPixels(); i++) {
+      strand.setPixelColor(i, strand.Color(0,0,0));
+    }
+    strand.show();
 	}
 
 }
@@ -854,18 +863,19 @@ void decodeInput() {
 	recevInput[0] = digitalRead(INPUT_PIN1); //Read the values from the PINs.
   recevInput[1] = digitalRead(INPUT_PIN2);
   recevInput[2] = digitalRead(INPUT_PIN3);
-	recevInput[3] = digitalRead(INPUT_PIN4);
-  recevInput[4] = digitalRead(INPUT_PIN5); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
-  
+	recevInput[3] = 0; //digitalRead(INPUT_PIN4);
+  recevInput[4] = 0; //digitalRead(INPUT_PIN5); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
+  if (SERIALDEBUGGING && (recevInput[0] || recevInput[1] || recevInput[2])) {Serial.print("Raw Input: "); Serial.print(recevInput[0]); Serial.print(recevInput[1]); Serial.println(recevInput[2]);}
 	decodedInput = 0;
 	for (int i = 0; i < INPUT_COUNT; i++) { //Decode the input.
 		if (recevInput[i])
 		{
-			decodedInput += pow(2, i); //Adds the equivalent number to the result. Pin1: +1, Pin2: +2, Pin3: +4, ...
+			decodedInput += (pow(2, i)+0.1); //Adds the equivalent number to the result. Pin1: +1, Pin2: +2, Pin3: +4, ...
+      if (SERIALDEBUGGING) {Serial.print("Input "); Serial.print(i); Serial.print(" is true, adding "); Serial.print(pow(2, i)); Serial.print(" to "); Serial.println(decodedInput);}
 		}
 	} 
 	
-	if (SERIALDEBUGGING) {Serial.print("Decoded Input: "); Serial.println(decodedInput);}
+	if (SERIALDEBUGGING && decodedInput != 0) {Serial.print("Decoded Input: "); Serial.println(decodedInput);}
 }
 
 
