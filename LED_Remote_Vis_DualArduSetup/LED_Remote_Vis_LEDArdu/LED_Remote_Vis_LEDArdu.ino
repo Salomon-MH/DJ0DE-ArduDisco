@@ -29,6 +29,10 @@
 /////// 29.07.2017: - Changed code for 5 pin decoding
 ///////             - Added microphone support
 ///////             
+/////// 03.08.2017: - Added function for central key management
+///////             - Added support for 3 seperate equally long strips, including seperate brightness levels etc.
+///////             ---> NOTE: Code **wont** work for strips with different LED ammount or probably for one strip any longer too. Use older version instead, see GitHub history.
+///////             
 
 
 //////////Libraries
@@ -58,6 +62,21 @@
 #define AUDIO_SAMLPING 255 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
 #define VISUALS   7 //Ammount of effects existing
 
+//I have 3 LED strips which are all supposed to show the same effects.
+//I'm going to define where which strip starts and ends here so the Ardu only has to calculate the effects one time.
+//LEDSTRANG1 **has to** be the largest strang.
+#define LEDSTRANG1_START 3
+#define LEDSTRANG1_END 4
+#define LEDSTRANG1_HALF (LEDSTRANG1_END-LEDSTRANG1_START)/2
+#define LEDSTRANG2_START 0
+#define LEDSTRANG2_END 1
+#define LEDSTRANG3_START 6
+#define LEDSTRANG3_END 7
+
+#define MAX_LEDS_PER_STRIP 2
+#define LED_CALCULATE_OFFSET 0 //Unused for now.
+
+
 //////////<Globals>
 //  These values either need to be remembered from the last pass of loop() or 
 //  need to be accessed by several functions in one pass, so they need to be global.
@@ -70,12 +89,18 @@ uint8_t palette = 0;  //Holds the current color palette.
 uint8_t visual = 0;   //Holds the current visual being displayed.
 float shuffleTime = 0;  //Holds how many seconds of runtime ago the last shuffle was (if shuffle mode is on).
 bool shuffle = false;  //Toggles shuffle mode.
-double knob = 0;   //Used for adjusting the max brightness.
+double brightness0 = 0;   //Used for adjusting the max brightness.
+double brightness2 = 0;
+double brightness3 = 0;
 bool isStaticLight = false; //Different Color behavior for static light.
 uint8_t staticRed = 255; //Values for color for static light.
 uint8_t staticGreen = 255;
 uint8_t staticBlue = 255;
 uint8_t staticState = 0; //Value for current color state for static light.
+
+uint8_t selectedStrip = 1;
+bool isWholeVisualization = false; //Defines if strangs should be handled as one or as seperate ones
+bool shiftOneRight = true; //Shifts all strangs one to the right. So it is 3->1->2
 
 //IMPORTANT:
 //  This array holds the "threshold" of each color function (i.e. the largest number they take before repeating).
@@ -113,8 +138,11 @@ uint16_t decodedInput = 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //For Traffic() visual
-int8_t pos[LED_TOTAL] = { -2};    //Stores a population of color "dots" to iterate across the LED strand.
-uint8_t rgb[LED_TOTAL][3] = {0};  //Stores each dot's specific RGB values.
+//int8_t pos[LED_TOTAL] = { -2};    //Stores a population of color "dots" to iterate across the LED strand.
+//uint8_t rgb[LED_TOTAL][3] = {0};  //Stores each dot's specific RGB values.
+int8_t pos[LEDSTRANG1_END-LEDSTRANG1_START] = { -2};    //Stores a population of color "dots" to iterate across the LED strand.
+uint8_t rgb[LEDSTRANG1_END-LEDSTRANG1_START][3] = {0};  //Stores each dot's specific RGB values.
+
 
 //For Snake() visual
 bool left = false;  //Determines the direction of iteration. Recycled in PaletteDance()
@@ -166,12 +194,23 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
     } //else break;
     volumetickcnt++;
   }
+
+  //Alternative method for recording. Isnt that fancy as the previous one though, so it's commented.
+  /*while(!digitalRead(AUDIO_PIN) && volume < 400) {
+        volume++;
+    }*/
+  //Would be a working frequency filter for the alternative recording method.
+  //This one interferes with the "bump" of the original code, so it's just nice to know that it works.
+  /*if (volume > 200 && volume < 300) {volume = volume;}
+  else volume = 0;*/
+
+  
   //Serial.println(volume);
   
   //"Virtual" music for testing.
   //volume = 12 + random(15);
   
-  //knob = analogRead(KNOB_PIN) / 1023.0; //Record how far the trimpot is twisted
+  //brightness0 = analogRead(KNOB_PIN) / 1023.0; //Record how far the trimpot is twisted
   //knob's default value is 1 now. Value of knob is defined by CycleBrightness()!!!
 
   //Sets a threshold for volume.
@@ -186,14 +225,16 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 
   //Check the Cycle* functions for specific instructions if you didn't include buttons in your design.
   ////////////////////////////////////////////////////////////////////////////////////////////////////
-  CyclePalette();  //Changes palette for shuffle mode or button press.
+  //CyclePalette();  //Changes palette for shuffle mode or button press.
   
   isStaticLight = false; //Resets static light option.
-  CycleVisual();   //Changes visualization for shuffle mode or button press.
+  //CycleVisual();   //Changes visualization for shuffle mode or button press.
 
   //ToggleShuffle(); //Toggles shuffle mode. Delete this if you didn't use buttons.
   
-  CycleBrightness();
+  //CycleBrightness();
+  ProcessInput(); //Calls specific functions depending on input given by IRArdu
+  
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   //This is where "gradient" is modulated to prevent overflow.
@@ -220,7 +261,9 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   }
 
   Visualize();   //Calls the appropriate visualization to be displayed with the globals as they are.
-
+  CopyLEDContentAndApplyBrightness();
+  strand.show(); //This command actually shows the lights. NEW: Called here, not in the visualizations.
+  
   gradient++;    //Increments gradient
 
   last = volume; //Records current volume for next pass
@@ -246,7 +289,7 @@ void Visualize() {
     case 4: return PaletteDance();
     case 5: return Glitter();
     case 6: return Paintball();
-  case 7: return StaticLight();
+    case 7: return StaticLight();
     default: return Pulse();
   }
 }
@@ -305,8 +348,13 @@ void Pulse() {
 
     //These variables determine where to start and end the pulse since it starts from the middle of the strand.
     //  The quantities are stored in variables so they only have to be computed once (plus we use them in the loop).
-    int start = LED_HALF - (LED_HALF * (volume / maxVol));
-    int finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
+    if (isWholeVisualization) {
+		int start = LED_HALF - (LED_HALF * (volume / maxVol));
+        int finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
+	} else {
+		int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
+        int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
+	}
     //Listed above, LED_HALF is simply half the number of LEDs on your strand. ? this part adjusts for an odd quantity.
 
     for (int i = start; i < finish; i++) {
@@ -327,7 +375,7 @@ void Pulse() {
       uint8_t colors[3];
       float avgCol = 0, avgCol2 = 0;
       for (int k = 0; k < 3; k++) {
-        colors[k] = split(col, k) * damp * knob * pow(volume / maxVol, 2);
+        colors[k] = split(col, k) * damp * brightness0 * pow(volume / maxVol, 2);
         avgCol += colors[k];
         avgCol2 += split(col2, k);
       }
@@ -337,8 +385,7 @@ void Pulse() {
       if (avgCol > avgCol2) strand.setPixelColor(i, strand.Color(colors[0], colors[1], colors[2]));
     }
   }
-  //This command actually shows the lights. If you make a new visualization, don't forget this!
-  strand.show();
+  
 }
 
 
@@ -352,9 +399,14 @@ void PalettePulse() {
   fade(0.75);
   if (bump) gradient += thresholds[palette] / 24;
   if (volume > 0) {
-    int start = LED_HALF - (LED_HALF * (volume / maxVol));
-    int finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
-    for (int i = start; i < finish; i++) {
+    if (isWholeVisualization) {
+		int start = LED_HALF - (LED_HALF * (volume / maxVol));
+        int finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
+	} else {
+		int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
+        int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
+	}
+	for (int i = start; i < finish; i++) {
       float damp = sin((i - start) * PI / float(finish - start));
       damp = pow(damp, 2.0);
 
@@ -368,7 +420,7 @@ void PalettePulse() {
       uint8_t colors[3];
       float avgCol = 0, avgCol2 = 0;
       for (int k = 0; k < 3; k++) {
-        colors[k] = split(col, k) * damp * knob * pow(volume / maxVol, 2);
+        colors[k] = split(col, k) * damp * brightness0 * pow(volume / maxVol, 2);
         avgCol += colors[k];
         avgCol2 += split(col2, k);
       }
@@ -376,7 +428,7 @@ void PalettePulse() {
       if (avgCol > avgCol2) strand.setPixelColor(i, strand.Color(colors[0], colors[1], colors[2]));
     }
   }
-  strand.show();
+  //strand.show();
 }
 
 
@@ -407,7 +459,7 @@ void Traffic() {
     if (slot != -3) {
 
       //Evens go right, odds go left, so evens start at 0, odds at the largest position.
-      pos[slot] = (slot % 2 == 0) ? -1 : strand.numPixels();
+      pos[slot] = (slot % 2 == 0) ? -1 : LEDSTRANG1_END;
 
       //Give it a color based on the value of "gradient" during its birth.
       uint32_t col = ColorPalette(-1);
@@ -431,18 +483,18 @@ void Traffic() {
       pos[i] += (i % 2) ? -1 : 1;
 
       //Odds will reach -2 by subtraction, but if an even dot goes beyond the LED strip, it'll be purged.
-      if (pos[i] >= strand.numPixels()) pos[i] = -2;
+      if (pos[i] >= LEDSTRANG1_END) pos[i] = -2;
 
       //Set the dot to its new position and respective color.
       //  I's old position's color will gradually fade out due to fade(), leaving a trail behind it.
       strand.setPixelColor( pos[i], strand.Color(
-                              float(rgb[i][0]) * pow(volume / maxVol, 2.0) * knob,
-                              float(rgb[i][1]) * pow(volume / maxVol, 2.0) * knob,
-                              float(rgb[i][2]) * pow(volume / maxVol, 2.0) * knob)
+                              float(rgb[i][0]) * pow(volume / maxVol, 2.0) * brightness0,
+                              float(rgb[i][1]) * pow(volume / maxVol, 2.0) * brightness0,
+                              float(rgb[i][2]) * pow(volume / maxVol, 2.0) * brightness0)
                           );
     }
   }
-  strand.show(); //Again, don't forget to actually show the lights!
+  //strand.show(); //Again, don't forget to actually show the lights!
 }
 
 
@@ -472,9 +524,9 @@ void Snake() {
 
     //Sets the dot to appropriate color and intensity
     strand.setPixelColor(dotPos, strand.Color(
-                           float(split(col, 0)) * pow(volume / maxVol, 1.5) * knob,
-                           float(split(col, 1)) * pow(volume / maxVol, 1.5) * knob,
-                           float(split(col, 2)) * pow(volume / maxVol, 1.5) * knob)
+                           float(split(col, 0)) * pow(volume / maxVol, 1.5) * brightness0,
+                           float(split(col, 1)) * pow(volume / maxVol, 1.5) * brightness0,
+                           float(split(col, 2)) * pow(volume / maxVol, 1.5) * brightness0)
                         );
 
     //This is where "avgTime" comes into play.
@@ -488,11 +540,16 @@ void Snake() {
     else if (gradient % 4 == 0)                                       dotPos += (left) ? -1 : 1;
   }
 
-  strand.show(); // Display the lights
+  //strand.show(); // Display the lights
 
   //Check if dot position is out of bounds.
-  if (dotPos < 0)    dotPos = strand.numPixels() - 1;
-  else if (dotPos >= strand.numPixels())  dotPos = 0;
+  if (isWholeVisualization) {
+	  if (dotPos < 0)    dotPos = strand.numPixels() - 1;
+      else if (dotPos >= strand.numPixels())  dotPos = 0;
+  } else {
+	  if (dotPos < LEDSTRANG1_START)    dotPos = LEDSTRANG1_END - 1;
+      else if (dotPos >= LEDSTRANG1_END)  dotPos = LEDSTRANG1_START;
+  }
 }
 
 
@@ -507,6 +564,15 @@ void PaletteDance() {
   if (bump) left = !left; //Change direction of iteration on bump
 
   //Only show if there's sound.
+  
+  int boundLow = 0;
+  int boundHigh = strand.numPixels();
+  
+  if (!isWholeVisualization) {
+	  boundLow = LEDSTRANG1_START;
+	  boundHigh = LEDSTRANG1_END;
+  }
+  
   if (volume > avgVol) {
 
     //This next part is convoluted, here's a summary of what's happening:
@@ -520,20 +586,20 @@ void PaletteDance() {
     //      the same as the range of position values, so the function map() is used. It's basically a built in proportion adjuster.
     //  Lastly, it's all multiplied together to get the right color, and intensity, in the correct spot.
     //      "gradient" is also added to slowly shift the colors over time.
-    for (int i = 0; i < strand.numPixels(); i++) {
+    for (int i = boundLow; i < boundHigh; i++) {
 
       float sinVal = abs(sin(
                            (i + dotPos) *
-                           (PI / float(strand.numPixels() / 1.25) )
+                           (PI / float(boundHigh / 1.25) )
                          ));
       sinVal *= sinVal;
       sinVal *= volume / maxVol;
-      sinVal *= knob;
+      sinVal *= brightness0;
 
       unsigned int val = float(thresholds[palette] + 1)
                          //map takes a value between -LED_TOTAL and +LED_TOTAL and returns one between 0 and LED_TOTAL
-                         * (float(i + map(dotPos, -1 * (strand.numPixels() - 1), strand.numPixels() - 1, 0, strand.numPixels() - 1))
-                            / float(strand.numPixels()))
+                         * (float(i + map(dotPos, -1 * (boundHigh - 1), boundHigh - 1, 0, boundHigh - 1))
+                            / float(boundHigh))
                          + (gradient);
 
       val %= thresholds[palette]; //make sure "val" is within range of the palette
@@ -554,11 +620,11 @@ void PaletteDance() {
   //If there's no sound, fade.
   else  fade(0.8);
 
-  strand.show(); //Show lights.
+  //strand.show(); //Show lights.
 
   //Loop "dotPos" if it goes out of bounds.
-  if (dotPos < 0) dotPos = strand.numPixels() - strand.numPixels() / 6;
-  else if (dotPos >= strand.numPixels() - strand.numPixels() / 6)  dotPos = 0;
+  if (dotPos < boundLow) dotPos = boundHigh - boundHigh / 6;
+  else if (dotPos >= boundHigh - boundHigh / 6)  dotPos = boundLow;
 }
 
 
@@ -572,20 +638,28 @@ void Glitter() {
   //This visual also fits a whole palette on the entire strip
   //  This just makes the palette cycle more quickly so it's more visually pleasing
   gradient += thresholds[palette] / 204;
-
+  
+  int boundLow = 0;
+  int boundHigh = strand.numPixels();
+  
+  if (!isWholeVisualization) {
+	  boundLow = LEDSTRANG1_START;
+	  boundHigh = LEDSTRANG1_END;
+  }
+  
   //"val" is used again as the proportional value to pass to ColorPalette() to fit the whole palette.
-  for (int i = 0; i < strand.numPixels(); i++) {
+  for (int i = boundLow; i < boundHigh; i++) {
     unsigned int val = float(thresholds[palette] + 1) *
-                       (float(i) / float(strand.numPixels()))
+                       (float(i) / float(boundHigh))
                        + (gradient);
     val %= thresholds[palette];
     uint32_t  col = ColorPalette(val);
 
     //We want the sparkles to be obvious, so we dim the background color.
     strand.setPixelColor(i, strand.Color(
-                           split(col, 0) / 6.0 * knob,
-                           split(col, 1) / 6.0 * knob,
-                           split(col, 2) / 6.0 * knob)
+                           split(col, 0) / 6.0 * brightness0,
+                           split(col, 1) / 6.0 * brightness0,
+                           split(col, 2) / 6.0 * brightness0)
                         );
   }
 
@@ -597,17 +671,18 @@ void Glitter() {
     randomSeed(micros());
 
     //Pick a random spot on the strand.
-    dotPos = random(strand.numPixels() - 1);
+    if (isWholeVisualization) dotPos = random(boundHigh - 1);
+	else dotPos = random(boundHigh);
 
     //Draw  sparkle at the random position, with appropriate brightness.
     strand.setPixelColor(dotPos, strand.Color(
-                           255.0 * pow(volume / maxVol, 2.0) * knob,
-                           255.0 * pow(volume / maxVol, 2.0) * knob,
-                           255.0 * pow(volume / maxVol, 2.0) * knob
+                           255.0 * pow(volume / maxVol, 2.0) * brightness0,
+                           255.0 * pow(volume / maxVol, 2.0) * brightness0,
+                           255.0 * pow(volume / maxVol, 2.0) * brightness0
                          ));
   }
   bleed(dotPos);
-  strand.show(); //Show the lights.
+  //strand.show(); //Show the lights.
 }
 
 
@@ -633,7 +708,8 @@ void Paintball() {
     randomSeed(micros());
 
     //Pick a random spot on the strip. Random was already reseeded above, so no real need to do it again.
-    dotPos = random(strand.numPixels() - 1);
+	if (isWholeVisualization) dotPos = random(strand.numPixels() - 1);
+	else dotPos = random(LEDSTRANG1_END);
 
     //Grab a random color from our palette.
     uint32_t col = ColorPalette(random(thresholds[palette]));
@@ -642,7 +718,7 @@ void Paintball() {
     uint8_t colors[3];
 
     //Relates brightness of the color to the relative volume and potentiometer value.
-    for (int i = 0; i < 3; i++) colors[i] = split(col, i) * pow(volume / maxVol, 2.0) * knob;
+    for (int i = 0; i < 3; i++) colors[i] = split(col, i) * pow(volume / maxVol, 2.0) * brightness0;
 
     //Splatters the "paintball" on the random position.
     strand.setPixelColor(dotPos, strand.Color(colors[0], colors[1], colors[2]));
@@ -653,7 +729,7 @@ void Paintball() {
     strand.setPixelColor(dotPos - 1, strand.Color(colors[0], colors[1], colors[2]));
     strand.setPixelColor(dotPos + 1, strand.Color(colors[0], colors[1], colors[2]));
   }
-  strand.show(); //Show lights.
+  //strand.show(); //Show lights.
 }
 
 
@@ -665,29 +741,12 @@ void Paintball() {
 void StaticLight() {
   isStaticLight = true;
   for (int i = 0; i < strand.numPixels(); i++) {
-    strand.setPixelColor(i, strand.Color(staticRed*knob,staticGreen*knob,staticBlue*knob));
+    strand.setPixelColor(i, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
   }
-  strand.show();
+  //strand.show();
 }
 
 
-
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////
-//DEBUG CYCLE
-//No reaction to sound, merely to see gradient progression of color palettes
-//NOT implemented in code as is, but is easily includable in the switch-case.
-void Cycle() {
-  for (int i = 0; i < strand.numPixels(); i++) {
-    float val = float(thresholds[palette]) * (float(i) / float(strand.numPixels())) + (gradient);
-    val = int(val) % thresholds[palette];
-    strand.setPixelColor(i, ColorPalette(val));
-  }
-  strand.show();
-  gradient += 32;
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //////////</Visual Functions>
 
@@ -699,7 +758,6 @@ void CyclePalette() {
   //IMPORTANT: Delete this whole if-block if you didn't use buttons//////////////////////////////////
 
   //If the binary number 1 is recieved via inputs, action is performed
-  if (decodedInput == 2){
     if (SERIALDEBUGGING) Serial.println("Changing Palette!");
     showKeyRecieved();
     if (isStaticLight) {
@@ -735,12 +793,11 @@ void CyclePalette() {
 
     maxVol = avgVol;  //Set max volume to average for a fresh experience.
   }
-  }
   ///////////////////////////////////////////////////////////////////////////////////////////////////
 
   //If shuffle mode is on, and it's been 30 seconds since the last shuffle, and then a modulo
   //  of gradient to get a random decision between palette or visualization shuffle
-  if (shuffle && millis() / 1000.0 - shuffleTime > 30 && gradient % 2) {
+  /*if (shuffle && millis() / 1000.0 - shuffleTime > 30 && gradient % 2) {
 
     shuffleTime = millis() / 1000.0; //Record the time this shuffle happened.
 
@@ -748,15 +805,12 @@ void CyclePalette() {
     if (palette >= sizeof(thresholds) / 2) palette = 0;
     gradient %= thresholds[palette];
     maxVol = avgVol;  //Set the max volume to average for a fresh experience.
-  }
+  }*/
 }
 
 
 void CycleVisual() {
 
-  //IMPORTANT: Delete this whole if-block if you didn't use buttons//////////////////////////////////
-  //(or change it)
-  if (decodedInput == 1) {
     if (SERIALDEBUGGING) Serial.println("Changing Visual!");
     showKeyRecieved();
     visual++;     //The purpose of this button: change the visual mode
@@ -772,23 +826,29 @@ void CycleVisual() {
     if (visual == 1) memset(pos, -2, sizeof(pos));
 
     //Gives Snake() and PaletteDance() visuals a random starting point if cycled to.
-    if (visual == 2 || visual == 3) {
+    int boundLow = 0;
+    int boundHigh = strand.numPixels();
+	if (!isWholeVisualization) {
+		boundLow = LEDSTRANG1_START;
+		boundHigh = LEDSTRANG1_END;
+	}
+	
+	if (visual == 2 || visual == 3) {
       randomSeed(analogRead(0));
-      dotPos = random(strand.numPixels());
+      dotPos = random(boundHigh);
     }
 
     //Like before, this delay is to prevent a button press from affecting "maxVol."
     //delay(350);
 
     maxVol = avgVol; //Set max volume to average for a fresh experience
-  }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////
 
   //If shuffle mode is on, and it's been 30 seconds since the last shuffle, and then a modulo
   //  of gradient WITH INVERTED LOGIC to get a random decision between what to shuffle.
   //  This guarantees one and only one of these shuffles will occur.
-  if (shuffle && millis() / 1000.0 - shuffleTime > 30 && !(gradient % 2)) {
+  /*if (shuffle && millis() / 1000.0 - shuffleTime > 30 && !(gradient % 2)) {
 
     shuffleTime = millis() / 1000.0; //Record the time this shuffle happened.
 
@@ -801,32 +861,177 @@ void CycleVisual() {
       dotPos = random(strand.numPixels());
     }
     maxVol = avgVol;
-  }
+  }*/
 }
 
 
 void CycleBrightness() {
 
   //If infrared is recieved and matches with IR_CHANGEBRIGHTNESS, action is performed
-  if (decodedInput == 3){
     if (SERIALDEBUGGING) Serial.println("Changing Brightness!");
     showKeyRecieved();
-    switch ((int)(knob*10)) {
-		case 10: knob = 0.8; break;
-		case 8: knob = 0.6; break;
-		case 6: knob = 0.4; break;
-		case 4: knob = 0.2; break;
-		case 2: knob = 0.0; break;
-		case 0: knob = 1; break;
-		default: knob = 1.0; break;
+	if (selectedStrip == 0) {
+		switch ((int)(brightness0*10)) {
+			case 10: brightness0 = 0.9; break;
+			case 9: brightness0 = 0.8; break;
+			case 8: brightness0 = 0.7; break;
+			case 7: brightness0 = 0.6; break;
+			case 6: brightness0 = 0.5; break;
+			case 5: brightness0 = 0.4; break;
+			case 4: brightness0 = 0.3; break;
+			case 3: brightness0 = 0.2; break;
+			case 2: brightness0 = 0.1; break;
+			case 1: brightness0 = 0.0; break;
+			case 0: brightness0 = 1; break;
+			default: brightness0 = 1.0; break;
+		}
+	} else if (selectedStrip == 1) {
+		switch ((int)(brightness1*10)) {
+			case 10: brightness1 = 0.9; break;
+			case 9: brightness1 = 0.8; break;
+			case 8: brightness1 = 0.7; break;
+			case 7: brightness1 = 0.6; break;
+			case 6: brightness1 = 0.5; break;
+			case 5: brightness1 = 0.4; break;
+			case 4: brightness1 = 0.3; break;
+			case 3: brightness1 = 0.2; break;
+			case 2: brightness1 = 0.1; break;
+			case 1: brightness1 = 0.0; break;
+			case 0: brightness1 = 1; break;
+			default: brightness1 = 1.0; break;
+		}
+	} else if (selectedStrip == 2) {
+		switch ((int)(brightness2*10)) {
+			case 10: brightness2 = 0.9; break;
+			case 9: brightness2 = 0.8; break;
+			case 8: brightness2 = 0.7; break;
+			case 7: brightness2 = 0.6; break;
+			case 6: brightness2 = 0.5; break;
+			case 5: brightness2 = 0.4; break;
+			case 4: brightness2 = 0.3; break;
+			case 3: brightness2 = 0.2; break;
+			case 2: brightness2 = 0.1; break;
+			case 1: brightness2 = 0.0; break;
+			case 0: brightness2 = 1; break;
+			default: brightness2 = 1.0; break;
+		}
+	} else if (selectedStrip == 3) {
+		switch ((int)(brightness3*10)) {
+			case 10: brightness3 = 0.9; break;
+			case 9: brightness3 = 0.8; break;
+			case 8: brightness3 = 0.7; break;
+			case 7: brightness3 = 0.6; break;
+			case 6: brightness3 = 0.5; break;
+			case 5: brightness3 = 0.4; break;
+			case 4: brightness3 = 0.3; break;
+			case 3: brightness3 = 0.2; break;
+			case 2: brightness3 = 0.1; break;
+			case 1: brightness3 = 0.0; break;
+			case 0: brightness3 = 1; break;
+			default: brightness3 = 1.0; break;
+		}
 	}
-  }
-  if (decodedInput == 7) {
-    showKeyRecieved();
-    if(knob == 0) knob = 1;
-    else knob = 0;
-  }
 }
+
+void turnOff() {
+	showKeyRecieved();
+    if(brightness0 == 0) brightness0 = 1;
+    else brightness0 = 0;
+}
+
+void turnOn() {
+	showKeyRecieved();
+    if(brightness0 == 0) brightness0 = 1;
+    else brightness0 = 0;
+}
+
+void CycleSelection() {
+	if (SERIALDEBUGGING) Serial.println("Switching selection!");
+	if (selectedStrip == 3) selectedStrip = 0;
+	else selectedStrip++;
+	showSelected();
+}
+
+void showSelected() {
+	int strangstart = 0;
+	int strangend = 0;
+	if (selectedStrip == 0) {strangstart = 0; strangend = strand.numPixels();}
+	if (selectedStrip == 1) {strangstart = LEDSTRANG1_START; strangend = LEDSTRANG1_END;}
+	if (selectedStrip == 2) {strangstart = LEDSTRANG2_START; strangend = LEDSTRANG2_END;}
+	if (selectedStrip == 3) {strangstart = LEDSTRANG3_START; strangend = LEDSTRANG3_END;}
+	
+	for (int i = strangstart; i < strangend-1; i++) {
+			strand.setPixelColor(i, strand.Color(0,0,0));
+	}
+	for (int i = 0; i < 3; i++) {
+		strand.setPixelColor(strangstart, strand.Color(0,0,255));
+		strand.setPixelColor(strangend, strand.Color(0,0,255));
+		strand.show();
+		delay(300);
+		decodeInput();
+		if (ProcessInput()) break; //Breaks if new key is detected
+		strand.setPixelColor(strangstart, strand.Color(0,0,0));
+		strand.setPixelColor(strangend, strand.Color(0,0,0));
+		strand.show();
+		delay(150);
+		decodeInput();
+		if (ProcessInput()) break; //Breaks if new key is detected
+	}
+}
+
+void CopyLEDContentAndApplyBrightness() {
+	if (!isWholeVisualization) {
+		for(i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++)
+		{
+			//Retrieve the color at the current position.
+			uint32_t col = strand.getPixelColor(LEDSTRANG1_START+i);
+			float colors[3]; //Array of the three RGB values
+			for (int j = 0; j < 3; j++) colors[j] = split(col, j);
+		
+			strand.setPixelColor(LEDSTRANG1_START+i, colors[0] * brightness1, colors[1] * brightness1, colors[2] * brightness1);
+			strand.setPixelColor(LEDSTRANG2_START+i, colors[0] * brightness2, colors[1] * brightness2, colors[2] * brightness2);
+			strand.setPixelColor(LEDSTRANG3_START+i, colors[0] * brightness3, colors[1] * brightness3, colors[2] * brightness3);
+		}
+	} else if (shiftOneRight /*&& isWholeVisualization*/) {
+		for(i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++) {
+			uint32_t col1 = strand.getPixelColor(LEDSTRANG1_START+i);
+			float colors1[3]; //Array of the three RGB values
+			for (int j = 0; j < 3; j++) colors1[j] = split(col1, j);
+			uint32_t col2 = strand.getPixelColor(LEDSTRANG2_START+i);
+			float colors2[3]; //Array of the three RGB values
+			for (int j = 0; j < 3; j++) colors2[j] = split(col2, j);
+			uint32_t col3 = strand.getPixelColor(LEDSTRANG3_START+i);
+			float colors3[3]; //Array of the three RGB values
+			for (int j = 0; j < 3; j++) colors3[j] = split(col3, j);
+			
+			strand.setPixelColor(LEDSTRANG1_START+i, colors2[0] * brightness1, colors2[1] * brightness1, colors2[2] * brightness1);
+			strand.setPixelColor(LEDSTRANG2_START+i, colors3[0] * brightness2, colors3[1] * brightness2, colors3[2] * brightness2);
+			strand.setPixelColor(LEDSTRANG3_START+i, colors1[0] * brightness3, colors1[1] * brightness3, colors1[2] * brightness3);
+		}
+	}
+	
+}
+
+
+
+//NEW: Central input management
+bool ProcessInput() {
+	switch(decodedInput) {
+		case 1: CycleVisual(); return true;
+		case 2: CyclePalette(); return true;
+		case 3: CycleBrightness(); return true;
+		case 4: CycleSelection(); return true; //Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
+		case 5: return true;
+		case 6: return true;
+		case 7: turnOff(); return true;
+		case 8: turnOn(); return true;
+		case 9: return true;
+		case 10: return true;
+		case 11: return true;
+		//...
+	}
+}
+
 
 
 // VISUAL EFFECT TO SHOW THAT A KEYSTROKE IS NOTICED.
@@ -836,14 +1041,18 @@ void showKeyRecieved() {
 		for (int i = 1; i < strand.numPixels()-1; i++) {
 			strand.setPixelColor(i, strand.Color(0,0,0));
 		}
-		strand.setPixelColor(0, strand.Color(0,255,0));
-		strand.setPixelColor(strand.numPixels()-1, strand.Color(0,255,0));
+		strand.setPixelColor(LEDSTRANG1_START, strand.Color(0,255,0));
+		strand.setPixelColor(LEDSTRANG1_END, strand.Color(0,255,0));
+		strand.setPixelColor(LEDSTRANG2_START, strand.Color(0,255,0));
+		strand.setPixelColor(LEDSTRANG2_END, strand.Color(0,255,0));
+		strand.setPixelColor(LEDSTRANG3_START, strand.Color(0,255,0));
+		strand.setPixelColor(LEDSTRANG3_END, strand.Color(0,255,0));
 		strand.show();
 		delay(KEYRECIEVE_NOTIFICATION_TIME);
-    for (int i = 0; i < strand.numPixels(); i++) {
-      strand.setPixelColor(i, strand.Color(0,0,0));
-    }
-    strand.show();
+		for (int i = 0; i < strand.numPixels(); i++) {
+			strand.setPixelColor(i, strand.Color(0,0,0));
+		}
+		strand.show();
 	}
 
 }
@@ -901,7 +1110,15 @@ void fade(float damper) {
 
   //"damper" must be between 0 and 1, or else you'll end up brightening the lights or doing nothing.
 
-  for (int i = 0; i < strand.numPixels(); i++) {
+  int boundLow = 0;
+  int boundHigh = strand.numPixels();
+  
+  if (!isWholeVisualization) {
+	  boundLow = LEDSTRANG1_START;
+	  boundHigh = LEDSTRANG1_END;
+  }
+  
+  for (int i = boundLow; i < boundHigh; i++) {
 
     //Retrieve the color at the current position.
     uint32_t col = strand.getPixelColor(i);
@@ -922,7 +1139,16 @@ void fade(float damper) {
 
 //"Bleeds" colors currently in the strand by averaging from a designated "Point"
 void bleed(uint8_t Point) {
-  for (int i = 1; i < strand.numPixels(); i++) {
+	
+  int boundLow = 1;
+  int boundHigh = strand.numPixels();
+  
+  if (!isWholeVisualization) {
+	  boundLow = LEDSTRANG1_START+1;
+	  boundHigh = LEDSTRANG1_END+1;
+  }
+	
+  for (int i = boundLow; i < boundHigh; i++) {
 
     //Starts by look at the pixels left and right of "Point"
     //  then slowly works its way out
