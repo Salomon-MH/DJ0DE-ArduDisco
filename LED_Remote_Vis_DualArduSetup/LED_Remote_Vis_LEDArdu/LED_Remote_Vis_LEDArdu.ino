@@ -55,7 +55,7 @@
 #define INPUT_PIN5  12
 
 //Others
-#define LED_TOTAL 9  //Change this to the number of LEDs in your strand.
+#define LED_TOTAL 60  //Change this to the number of LEDs in your strand.
 #define LED_HALF  LED_TOTAL/2
 #define KEYRECIEVE_NOTIFICATION_TIME 100 //How long the white flash is shown after IR detected. 0 completely disables this fuction.
 #define SERIALDEBUGGING 1 //Should serial send debugging information? 0=FALSE 1=TRUE
@@ -66,22 +66,20 @@
 //I'm going to define where which strip starts and ends here so the Ardu only has to calculate the effects one time.
 //LEDSTRANG1 **has to** be the largest strang.
 #define LEDSTRANG1_START 0
-#define LEDSTRANG1_END 2
+#define LEDSTRANG1_END 19
 #define LEDSTRANG1_HALF (LEDSTRANG1_END-LEDSTRANG1_START)/2
-#define LEDSTRANG2_START 6
-#define LEDSTRANG2_END 8
-#define LEDSTRANG3_START 3
-#define LEDSTRANG3_END 5
-
-#define MAX_LEDS_PER_STRIP 2
-#define LED_CALCULATE_OFFSET 0 //Unused for now.
+#define LEDSTRANG2_START 20
+#define LEDSTRANG2_END 39
+#define LEDSTRANG3_START 40
+#define LEDSTRANG3_END 59
 
 
 //////////<Globals>
 //  These values either need to be remembered from the last pass of loop() or 
 //  need to be accessed by several functions in one pass, so they need to be global.
 
-Adafruit_NeoPixel strand = Adafruit_NeoPixel(LED_TOTAL, LED_PIN, NEO_GRB + NEO_KHZ800);  //LED strand object by NeoPixel library
+Adafruit_NeoPixel strand = Adafruit_NeoPixel(LED_TOTAL, 4, NEO_GRB + NEO_KHZ800);  // **DUMMY** LED strand object by NeoPixel library used for visualization
+Adafruit_NeoPixel strandReal = Adafruit_NeoPixel(LED_TOTAL, LED_PIN, NEO_GRB + NEO_KHZ800);  //LED strand object by NeoPixel library used to show colors
 
 //LED Color
 uint16_t gradient = 0; //Used to iterate and loop through each color palette gradually
@@ -99,9 +97,9 @@ uint8_t staticGreen = 255;
 uint8_t staticBlue = 255;
 uint8_t staticState = 0; //Value for current color state for static light.
 
-uint8_t selectedStrip = 1;
-bool isWholeVisualization = true; //Defines if strangs should be handled as one or as seperate ones
-bool shiftOneRight = true; //Shifts all strangs one to the right. So it is 3->1->2
+uint8_t selectedStrip = 0;
+bool isWholeVisualization = false; //Defines if strangs should be handled as one or as seperate ones
+bool shiftOneRight = false; //Shifts all strangs one to the right. So it is 3->1->2
 
 //IMPORTANT:
 //  This array holds the "threshold" of each color function (i.e. the largest number they take before repeating).
@@ -151,7 +149,8 @@ int8_t dotPos = 0;  //Holds which LED in the strand the dot is positioned at. Re
 float timeBump = 0; //Holds the time (in runtime seconds) the last "bump" occurred.
 float avgTime = 0;  //Holds the "average" amount of time between each "bump" (used for pacing the dot's movement).
 
-
+//For LoopThrough() visual
+int loopthroughcounter = 0;
 
 //////////</Globals>
 
@@ -177,7 +176,8 @@ void setup() {    //Like it's named, this gets ran before any other function.
   digitalWrite(INPUT_PIN5, LOW);*/
   
   strand.begin(); //Initialize the LED strand object.
-  strand.show();  //Show a blank strand, just to get the LED's ready for use.
+  strandReal.begin();
+  strandReal.show();  //Show a blank strand, just to get the LED's ready for use.
 
 }
 
@@ -228,14 +228,13 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   //CyclePalette();  //Changes palette for shuffle mode or button press.
   
-  isStaticLight = false; //Resets static light option.
   //CycleVisual();   //Changes visualization for shuffle mode or button press.
 
   //ToggleShuffle(); //Toggles shuffle mode. Delete this if you didn't use buttons.
   
   //CycleBrightness();
   ProcessInput(); //Calls specific functions depending on input given by IRArdu
-  
+  isStaticLight = false; //Resets static light option.
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   //This is where "gradient" is modulated to prevent overflow.
@@ -263,7 +262,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 
   Visualize();   //Calls the appropriate visualization to be displayed with the globals as they are.
   CopyLEDContentAndApplyBrightness();
-  strand.show(); //This command actually shows the lights. NEW: Called here, not in the visualizations.
+  strandReal.show(); //This command actually shows the lights. NEW: Called here, not in the visualizations.
   
   gradient++;    //Increments gradient
 
@@ -290,7 +289,7 @@ void Visualize() {
     case 4: return PaletteDance();
     case 5: return Glitter();
     case 6: return Paintball();
-    case 7: return StaticLight();
+    case 7: return /*StaticLight()*/ LoopThrough();
     default: return Pulse();
   }
 }
@@ -745,6 +744,24 @@ void StaticLight() {
   //strand.show();
 }
 
+////////////////////////////////////////////////////////////
+////////////////////    Loop through    ////////////////////
+////////////////////////////////////////////////////////////
+// Cycle through all LEDs seperately. SELFMADE.
+
+void LoopThrough() {
+  isStaticLight = true;
+  for (int i = 0; i < strand.numPixels(); i++) {
+    strand.setPixelColor(i, strand.Color(0,0,0));
+  }
+  strand.setPixelColor(loopthroughcounter, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
+  if(loopthroughcounter+2 > strand.numPixels()) loopthroughcounter = 0;
+  else loopthroughcounter++;
+  delay(250);
+  //strand.show();
+}
+
+
 
 
 //////////</Visual Functions>
@@ -774,6 +791,8 @@ void CyclePalette() {
     case 9: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
     default: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
     }
+    if (SERIALDEBUGGING) Serial.print("Switched static light to ");
+    if (SERIALDEBUGGING) Serial.println(staticState);
   } else {
   
   palette++;     //This is this button's purpose, to change the color palette.
@@ -954,24 +973,36 @@ void CycleSelection() {
 void showSelected() {
 	int strangstart = 0;
 	int strangend = 0;
-	if (selectedStrip == 0) {strangstart = 0; strangend = strand.numPixels();}
+	if (selectedStrip == 0) {strangstart = 0; strangend = strand.numPixels()-1;}
 	if (selectedStrip == 1) {strangstart = LEDSTRANG1_START; strangend = LEDSTRANG1_END;}
 	if (selectedStrip == 2) {strangstart = LEDSTRANG2_START; strangend = LEDSTRANG2_END;}
 	if (selectedStrip == 3) {strangstart = LEDSTRANG3_START; strangend = LEDSTRANG3_END;}
 	
 	for (int i = strangstart; i < strangend-1; i++) {
-			strand.setPixelColor(i, strand.Color(0,0,0));
+			strandReal.setPixelColor(i, strand.Color(0,0,0));
 	}
 	for (int i = 0; i < 3; i++) {
-		strand.setPixelColor(strangstart, strand.Color(0,0,255));
-		strand.setPixelColor(strangend, strand.Color(0,0,255));
-		strand.show();
+		strandReal.setPixelColor(strangstart, strand.Color(0,0,255));
+		strandReal.setPixelColor(strangend, strand.Color(0,0,255));
+    if (selectedStrip == 0) {
+      strandReal.setPixelColor(LEDSTRANG1_END, strand.Color(0,0,255));
+      strandReal.setPixelColor(LEDSTRANG2_START, strand.Color(0,0,255));
+      strandReal.setPixelColor(LEDSTRANG2_END, strand.Color(0,0,255));
+      strandReal.setPixelColor(LEDSTRANG3_START, strand.Color(0,0,255));
+    }
+		strandReal.show();
 		delay(300);
 		decodeInput();
 		if (ProcessInput()) break; //Breaks if new key is detected
-		strand.setPixelColor(strangstart, strand.Color(0,0,0));
-		strand.setPixelColor(strangend, strand.Color(0,0,0));
-		strand.show();
+		strandReal.setPixelColor(strangstart, strand.Color(0,0,0));
+		strandReal.setPixelColor(strangend, strand.Color(0,0,0));
+		if (selectedStrip == 0) {
+      strandReal.setPixelColor(LEDSTRANG1_END, strand.Color(0,0,0));
+      strandReal.setPixelColor(LEDSTRANG2_START, strand.Color(0,0,0));
+      strandReal.setPixelColor(LEDSTRANG2_END, strand.Color(0,0,0));
+      strandReal.setPixelColor(LEDSTRANG3_START, strand.Color(0,0,0));
+    }
+		strandReal.show();
 		delay(150);
 		decodeInput();
 		if (ProcessInput()) break; //Breaks if new key is detected
@@ -979,6 +1010,17 @@ void showSelected() {
 }
 
 void CopyLEDContentAndApplyBrightness() {
+	//Copy content in general.
+  for(int i = 0; i < strand.numPixels(); i++)
+    {
+      //Retrieve the color at the current position.
+      uint32_t col = strand.getPixelColor(i);
+      float colors[3]; //Array of the three RGB values
+      for (int j = 0; j < 3; j++) colors[j] = split(col, j);
+    
+      strandReal.setPixelColor(i, colors[0], colors[1], colors[2]);
+    }
+  
 	if (!isWholeVisualization) {
 		for(int i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++)
 		{
@@ -987,25 +1029,25 @@ void CopyLEDContentAndApplyBrightness() {
 			float colors[3]; //Array of the three RGB values
 			for (int j = 0; j < 3; j++) colors[j] = split(col, j);
 		
-			strand.setPixelColor(LEDSTRANG1_START+i, colors[0] * brightness1, colors[1] * brightness1, colors[2] * brightness1);
-			strand.setPixelColor(LEDSTRANG2_START+i, colors[0] * brightness2, colors[1] * brightness2, colors[2] * brightness2);
-			strand.setPixelColor(LEDSTRANG3_START+i, colors[0] * brightness3, colors[1] * brightness3, colors[2] * brightness3);
+			strandReal.setPixelColor(LEDSTRANG1_START+i, colors[0] * brightness1, colors[1] * brightness1, colors[2] * brightness1);
+			strandReal.setPixelColor(LEDSTRANG2_START+i, colors[0] * brightness2, colors[1] * brightness2, colors[2] * brightness2);
+			strandReal.setPixelColor(LEDSTRANG3_START+i, colors[0] * brightness3, colors[1] * brightness3, colors[2] * brightness3);
 		}
 	} else if (shiftOneRight /*&& isWholeVisualization*/) {
-		for(int i = 0; i < (LEDSTRANG1_END - LEDSTRANG1_START); i++) {
+		for(int i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++) {
 			uint32_t col1 = strand.getPixelColor(LEDSTRANG1_START+i);
-			float colors1[3]; //Array of the three RGB values
+			float colors1[3]; //Array of the three RGB values for strang 1
 			for (int j = 0; j < 3; j++) colors1[j] = split(col1, j);
 			uint32_t col2 = strand.getPixelColor(LEDSTRANG2_START+i);
-			float colors2[3]; //Array of the three RGB values
+			float colors2[3]; //Array of the three RGB values for strang 2
 			for (int j = 0; j < 3; j++) colors2[j] = split(col2, j);
 			uint32_t col3 = strand.getPixelColor(LEDSTRANG3_START+i);
-			float colors3[3]; //Array of the three RGB values
+			float colors3[3]; //Array of the three RGB values for strang 3
 			for (int j = 0; j < 3; j++) colors3[j] = split(col3, j);
 			
-			strand.setPixelColor(LEDSTRANG1_START+i, colors2[0] * brightness1, colors2[1] * brightness1, colors2[2] * brightness1);
-			strand.setPixelColor(LEDSTRANG2_START+i, colors3[0] * brightness2, colors3[1] * brightness2, colors3[2] * brightness2);
-			strand.setPixelColor(LEDSTRANG3_START+i, colors1[0] * brightness3, colors1[1] * brightness3, colors1[2] * brightness3);
+			strandReal.setPixelColor(LEDSTRANG1_START+i, colors2[0] * brightness1, colors2[1] * brightness1, colors2[2] * brightness1);
+			strandReal.setPixelColor(LEDSTRANG2_START+i, colors3[0] * brightness2, colors3[1] * brightness2, colors3[2] * brightness2);
+			strandReal.setPixelColor(LEDSTRANG3_START+i, colors1[0] * brightness3, colors1[1] * brightness3, colors1[2] * brightness3);
 		}
 	}
 	
@@ -1038,20 +1080,20 @@ void showKeyRecieved() {
 	if (KEYRECIEVE_NOTIFICATION_TIME != 0)
 	{
 		for (int i = 1; i < strand.numPixels()-1; i++) {
-			strand.setPixelColor(i, strand.Color(0,0,0));
+			strandReal.setPixelColor(i, strand.Color(0,0,0));
 		}
-		strand.setPixelColor(LEDSTRANG1_START, strand.Color(0,255,0));
-		strand.setPixelColor(LEDSTRANG1_END, strand.Color(0,255,0));
-		strand.setPixelColor(LEDSTRANG2_START, strand.Color(0,255,0));
-		strand.setPixelColor(LEDSTRANG2_END, strand.Color(0,255,0));
-		strand.setPixelColor(LEDSTRANG3_START, strand.Color(0,255,0));
-		strand.setPixelColor(LEDSTRANG3_END, strand.Color(0,255,0));
-		strand.show();
+		strandReal.setPixelColor(LEDSTRANG1_START, strand.Color(0,255,0));
+		strandReal.setPixelColor(LEDSTRANG1_END, strand.Color(0,255,0));
+		strandReal.setPixelColor(LEDSTRANG2_START, strand.Color(0,255,0));
+		strandReal.setPixelColor(LEDSTRANG2_END, strand.Color(0,255,0));
+		strandReal.setPixelColor(LEDSTRANG3_START, strand.Color(0,255,0));
+		strandReal.setPixelColor(LEDSTRANG3_END, strand.Color(0,255,0));
+		strandReal.show();
 		delay(KEYRECIEVE_NOTIFICATION_TIME);
 		for (int i = 0; i < strand.numPixels(); i++) {
-			strand.setPixelColor(i, strand.Color(0,0,0));
+			strandReal.setPixelColor(i, strand.Color(0,0,0));
 		}
-		strand.show();
+		strandReal.show();
 	}
 
 }
