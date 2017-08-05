@@ -55,7 +55,7 @@
 #define INPUT_PIN5  12
 
 //Others
-#define LED_TOTAL 8  //Change this to the number of LEDs in your strand.
+#define LED_TOTAL 9  //Change this to the number of LEDs in your strand.
 #define LED_HALF  LED_TOTAL/2
 #define KEYRECIEVE_NOTIFICATION_TIME 100 //How long the white flash is shown after IR detected. 0 completely disables this fuction.
 #define SERIALDEBUGGING 1 //Should serial send debugging information? 0=FALSE 1=TRUE
@@ -65,13 +65,13 @@
 //I have 3 LED strips which are all supposed to show the same effects.
 //I'm going to define where which strip starts and ends here so the Ardu only has to calculate the effects one time.
 //LEDSTRANG1 **has to** be the largest strang.
-#define LEDSTRANG1_START 3
-#define LEDSTRANG1_END 4
+#define LEDSTRANG1_START 0
+#define LEDSTRANG1_END 2
 #define LEDSTRANG1_HALF (LEDSTRANG1_END-LEDSTRANG1_START)/2
-#define LEDSTRANG2_START 0
-#define LEDSTRANG2_END 1
-#define LEDSTRANG3_START 6
-#define LEDSTRANG3_END 7
+#define LEDSTRANG2_START 6
+#define LEDSTRANG2_END 8
+#define LEDSTRANG3_START 3
+#define LEDSTRANG3_END 5
 
 #define MAX_LEDS_PER_STRIP 2
 #define LED_CALCULATE_OFFSET 0 //Unused for now.
@@ -89,9 +89,10 @@ uint8_t palette = 0;  //Holds the current color palette.
 uint8_t visual = 0;   //Holds the current visual being displayed.
 float shuffleTime = 0;  //Holds how many seconds of runtime ago the last shuffle was (if shuffle mode is on).
 bool shuffle = false;  //Toggles shuffle mode.
-double brightness0 = 0;   //Used for adjusting the max brightness.
-double brightness2 = 0;
-double brightness3 = 0;
+double brightness0 = 1;   //Used for adjusting the max brightness.
+double brightness1 = 1;
+double brightness2 = 1;
+double brightness3 = 1;
 bool isStaticLight = false; //Different Color behavior for static light.
 uint8_t staticRed = 255; //Values for color for static light.
 uint8_t staticGreen = 255;
@@ -99,7 +100,7 @@ uint8_t staticBlue = 255;
 uint8_t staticState = 0; //Value for current color state for static light.
 
 uint8_t selectedStrip = 1;
-bool isWholeVisualization = false; //Defines if strangs should be handled as one or as seperate ones
+bool isWholeVisualization = true; //Defines if strangs should be handled as one or as seperate ones
 bool shiftOneRight = true; //Shifts all strangs one to the right. So it is 3->1->2
 
 //IMPORTANT:
@@ -348,13 +349,12 @@ void Pulse() {
 
     //These variables determine where to start and end the pulse since it starts from the middle of the strand.
     //  The quantities are stored in variables so they only have to be computed once (plus we use them in the loop).
+    int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
+    int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
     if (isWholeVisualization) {
-		int start = LED_HALF - (LED_HALF * (volume / maxVol));
-        int finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
-	} else {
-		int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
-        int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
-	}
+		    start = LED_HALF - (LED_HALF * (volume / maxVol));
+        finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
+	  }
     //Listed above, LED_HALF is simply half the number of LEDs on your strand. ? this part adjusts for an odd quantity.
 
     for (int i = start; i < finish; i++) {
@@ -399,14 +399,13 @@ void PalettePulse() {
   fade(0.75);
   if (bump) gradient += thresholds[palette] / 24;
   if (volume > 0) {
+    int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
+    int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
     if (isWholeVisualization) {
-		int start = LED_HALF - (LED_HALF * (volume / maxVol));
-        int finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
-	} else {
-		int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
-        int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
-	}
-	for (int i = start; i < finish; i++) {
+		    start = LED_HALF - (LED_HALF * (volume / maxVol));
+        finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
+	  }
+	  for (int i = start; i < finish; i++) {
       float damp = sin((i - start) * PI / float(finish - start));
       damp = pow(damp, 2.0);
 
@@ -981,7 +980,7 @@ void showSelected() {
 
 void CopyLEDContentAndApplyBrightness() {
 	if (!isWholeVisualization) {
-		for(i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++)
+		for(int i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++)
 		{
 			//Retrieve the color at the current position.
 			uint32_t col = strand.getPixelColor(LEDSTRANG1_START+i);
@@ -993,7 +992,7 @@ void CopyLEDContentAndApplyBrightness() {
 			strand.setPixelColor(LEDSTRANG3_START+i, colors[0] * brightness3, colors[1] * brightness3, colors[2] * brightness3);
 		}
 	} else if (shiftOneRight /*&& isWholeVisualization*/) {
-		for(i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++) {
+		for(int i = 0; i < (LEDSTRANG1_END - LEDSTRANG1_START); i++) {
 			uint32_t col1 = strand.getPixelColor(LEDSTRANG1_START+i);
 			float colors1[3]; //Array of the three RGB values
 			for (int j = 0; j < 3; j++) colors1[j] = split(col1, j);
@@ -1020,10 +1019,10 @@ bool ProcessInput() {
 		case 1: CycleVisual(); return true;
 		case 2: CyclePalette(); return true;
 		case 3: CycleBrightness(); return true;
-		case 4: CycleSelection(); return true; //Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
+		case 4: /*CycleSelection();*/ return true; //Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
 		case 5: return true;
 		case 6: return true;
-		case 7: turnOff(); return true;
+		case 7: /*turnOff();*/ CycleSelection(); return true;
 		case 8: turnOn(); return true;
 		case 9: return true;
 		case 10: return true;
