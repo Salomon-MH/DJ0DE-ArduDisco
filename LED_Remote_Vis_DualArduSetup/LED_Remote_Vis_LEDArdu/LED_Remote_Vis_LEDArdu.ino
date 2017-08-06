@@ -33,10 +33,12 @@
 ///////             - Added support for 3 seperate equally long strips, including seperate brightness levels etc.
 ///////             ---> NOTE: Code **wont** work for strips with different LED ammount or probably for one strip any longer too. Use older version instead, see GitHub history.
 ///////             
-
-/////// TO DOs:
-///////           - 3 Modes: All in all, all strips one each, all strips three each
-///////           - Backlight (permanent static light)
+/////// 05.08.2017: - Bug fixes for starng selection, strang copying, strang moving, ... (By adding a 'virtual' second equal LED strang)
+///////             
+/////// 06.08.2017: - Added background light: A permanent light, which remains even when there is no visualization. Reason: Dark room during silence.
+///////             - background light / backlight is slowly "pusling"
+///////             - flexible ammount of copies/'instances'
+///////             
 
 
 //////////Libraries
@@ -69,13 +71,14 @@
 //I have 3 LED strips which are all supposed to show the same effects.
 //I'm going to define where which strip starts and ends here so the Ardu only has to calculate the effects one time.
 //LEDSTRANG1 **has to** be the largest strang.
-#define LEDSTRANG1_START 0
+//Planning to get these obsolete. - UPDATE: These are now obsolete and are used nowhere, so they are commented out.
+/*#define LEDSTRANG1_START 0
 #define LEDSTRANG1_END 19
 #define LEDSTRANG1_HALF (LEDSTRANG1_END-LEDSTRANG1_START)/2
 #define LEDSTRANG2_START 20
 #define LEDSTRANG2_END 39
 #define LEDSTRANG3_START 40
-#define LEDSTRANG3_END 59
+#define LEDSTRANG3_END 59*/
 
 
 //////////<Globals>
@@ -104,8 +107,8 @@ float timeBacklightChanged = 0;
 bool negBacklightChange = true;
 
 uint8_t selectedStrip = 0;
-bool isWholeVisualization = false; //Defines if strangs should be handled as one or as seperate ones
-uint8_t visualizationCopyCount = 1; //Defines, how many times the vis should be copied. Will make isWholeVisualization obsolete IN FUTURE - TODO.
+//bool isWholeVisualization = false; //OBSOLETE + UNUSED: Defines if strangs should be handled as one or as seperate ones
+uint8_t virtualStripCount = 9; //Defines, how many times the vis should be copied. Makes isWholeVisualization obsolete.
 uint8_t staticBacklight = 5;
 bool staticBacklightEnabled = true; //Defines a static backlight so the room is never completely dark
 bool shiftOneRight = false; //Shifts all strangs one to the right. So it is 3->1->2
@@ -148,8 +151,8 @@ uint16_t decodedInput = 0;
 //For Traffic() visual
 //int8_t pos[LED_TOTAL] = { -2};    //Stores a population of color "dots" to iterate across the LED strand.
 //uint8_t rgb[LED_TOTAL][3] = {0};  //Stores each dot's specific RGB values.
-int8_t pos[LEDSTRANG1_END-LEDSTRANG1_START] = { -2};    //Stores a population of color "dots" to iterate across the LED strand.
-uint8_t rgb[LEDSTRANG1_END-LEDSTRANG1_START][3] = {0};  //Stores each dot's specific RGB values.
+int8_t pos[LED_TOTAL/3] = { -2};    //Stores a population of color "dots" to iterate across the LED strand.
+uint8_t rgb[LED_TOTAL/3][3] = {0};  //Stores each dot's specific RGB values.
 
 
 //For Snake() visual
@@ -300,7 +303,7 @@ void Visualize() {
     case 4: return PaletteDance();
     case 5: return Glitter();
     case 6: return Paintball();
-    case 7: return /*StaticLight()*/ LoopThrough();
+    case 7: return StaticLight()/*LoopThrough()*/;
     default: return Pulse();
   }
 }
@@ -359,12 +362,8 @@ void Pulse() {
 
     //These variables determine where to start and end the pulse since it starts from the middle of the strand.
     //  The quantities are stored in variables so they only have to be computed once (plus we use them in the loop).
-    int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
-    int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
-    if (isWholeVisualization) {
-		    start = LED_HALF - (LED_HALF * (volume / maxVol));
-        finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
-	  }
+    int start = getStripMid(1) - (getStripMid(1) * (volume / maxVol));
+    int finish = getStripMid(1) + (getStripMid(1) * (volume / maxVol)) + getStripEnd(1) % 2;
     //Listed above, LED_HALF is simply half the number of LEDs on your strand. ? this part adjusts for an odd quantity.
 
     for (int i = start; i < finish; i++) {
@@ -409,12 +408,8 @@ void PalettePulse() {
   fade(0.75);
   if (bump) gradient += thresholds[palette] / 24;
   if (volume > 0) {
-    int start = LEDSTRANG1_HALF - (LEDSTRANG1_HALF * (volume / maxVol));
-    int finish = LEDSTRANG1_HALF + (LEDSTRANG1_HALF * (volume / maxVol)) + LEDSTRANG1_END % 2;
-    if (isWholeVisualization) {
-		    start = LED_HALF - (LED_HALF * (volume / maxVol));
-        finish = LED_HALF + (LED_HALF * (volume / maxVol)) + strand.numPixels() % 2;
-	  }
+    int start = getStripMid(1) - (getStripMid(1) * (volume / maxVol));
+    int finish = getStripMid(1) + (getStripMid(1) * (volume / maxVol)) + getStripEnd(1) % 2;
 	  for (int i = start; i < finish; i++) {
       float damp = sin((i - start) * PI / float(finish - start));
       damp = pow(damp, 2.0);
@@ -468,7 +463,7 @@ void Traffic() {
     if (slot != -3) {
 
       //Evens go right, odds go left, so evens start at 0, odds at the largest position.
-      pos[slot] = (slot % 2 == 0) ? -1 : LEDSTRANG1_END;
+      pos[slot] = (slot % 2 == 0) ? -1 : getStripEnd(1);
 
       //Give it a color based on the value of "gradient" during its birth.
       uint32_t col = ColorPalette(-1);
@@ -492,7 +487,7 @@ void Traffic() {
       pos[i] += (i % 2) ? -1 : 1;
 
       //Odds will reach -2 by subtraction, but if an even dot goes beyond the LED strip, it'll be purged.
-      if (pos[i] >= LEDSTRANG1_END) pos[i] = -2;
+      if (pos[i] >= getStripEnd(1)) pos[i] = -2;
 
       //Set the dot to its new position and respective color.
       //  I's old position's color will gradually fade out due to fade(), leaving a trail behind it.
@@ -552,13 +547,8 @@ void Snake() {
   //strand.show(); // Display the lights
 
   //Check if dot position is out of bounds.
-  if (isWholeVisualization) {
-	  if (dotPos < 0)    dotPos = strand.numPixels() - 1;
-      else if (dotPos >= strand.numPixels())  dotPos = 0;
-  } else {
-	  if (dotPos < LEDSTRANG1_START)    dotPos = LEDSTRANG1_END - 1;
-      else if (dotPos >= LEDSTRANG1_END)  dotPos = LEDSTRANG1_START;
-  }
+  if (dotPos < 0)    dotPos = getStripEnd(1);
+  else if (dotPos >= getStripEnd(1)+1)  dotPos = getStripStart(1);
 }
 
 
@@ -574,13 +564,8 @@ void PaletteDance() {
 
   //Only show if there's sound.
   
-  int boundLow = 0;
-  int boundHigh = strand.numPixels();
-  
-  if (!isWholeVisualization) {
-	  boundLow = LEDSTRANG1_START;
-	  boundHigh = LEDSTRANG1_END;
-  }
+  int boundLow = getStripStart(1);
+  int boundHigh = getStripEnd(1)+1;
   
   if (volume > avgVol) {
 
@@ -648,13 +633,8 @@ void Glitter() {
   //  This just makes the palette cycle more quickly so it's more visually pleasing
   gradient += thresholds[palette] / 204;
   
-  int boundLow = 0;
-  int boundHigh = strand.numPixels();
-  
-  if (!isWholeVisualization) {
-	  boundLow = LEDSTRANG1_START;
-	  boundHigh = LEDSTRANG1_END;
-  }
+  int boundLow = getStripStart(1);
+  int boundHigh = getStripEnd(1)+1;
   
   //"val" is used again as the proportional value to pass to ColorPalette() to fit the whole palette.
   for (int i = boundLow; i < boundHigh; i++) {
@@ -680,8 +660,7 @@ void Glitter() {
     randomSeed(micros());
 
     //Pick a random spot on the strand.
-    if (isWholeVisualization) dotPos = random(boundHigh - 1);
-	else dotPos = random(boundHigh);
+    dotPos = random(boundHigh - 1);
 
     //Draw  sparkle at the random position, with appropriate brightness.
     strand.setPixelColor(dotPos, strand.Color(
@@ -717,8 +696,7 @@ void Paintball() {
     randomSeed(micros());
 
     //Pick a random spot on the strip. Random was already reseeded above, so no real need to do it again.
-	if (isWholeVisualization) dotPos = random(strand.numPixels() - 1);
-	else dotPos = random(LEDSTRANG1_END);
+    dotPos = random(getStripEnd(1));
 
     //Grab a random color from our palette.
     uint32_t col = ColorPalette(random(thresholds[palette]));
@@ -749,7 +727,7 @@ void Paintball() {
 
 void StaticLight() {
   isStaticLight = true;
-  for (int i = 0; i < strand.numPixels(); i++) {
+  for (int i = 0; i < getStripEnd(1)+1; i++) {
     strand.setPixelColor(i, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
   }
   //strand.show();
@@ -762,11 +740,11 @@ void StaticLight() {
 
 void LoopThrough() {
   isStaticLight = true;
-  for (int i = 0; i < strand.numPixels(); i++) {
+  for (int i = 0; i < getStripEnd(1)+1; i++) {
     strand.setPixelColor(i, strand.Color(0,0,0));
   }
   strand.setPixelColor(loopthroughcounter, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
-  if(loopthroughcounter+2 > strand.numPixels()) loopthroughcounter = 0;
+  if(loopthroughcounter+1 > getStripEnd(1)) loopthroughcounter = 0;
   else loopthroughcounter++;
   delay(250);
   //strand.show();
@@ -855,12 +833,8 @@ void CycleVisual() {
     if (visual == 1) memset(pos, -2, sizeof(pos));
 
     //Gives Snake() and PaletteDance() visuals a random starting point if cycled to.
-    int boundLow = 0;
-    int boundHigh = strand.numPixels();
-	if (!isWholeVisualization) {
-		boundLow = LEDSTRANG1_START;
-		boundHigh = LEDSTRANG1_END;
-	}
+    int boundLow = getStripStart(1);
+    int boundHigh = getStripEnd(1)+1;
 	
 	if (visual == 2 || visual == 3) {
       randomSeed(analogRead(0));
@@ -985,21 +959,19 @@ void showSelected() {
 	int strangstart = 0;
 	int strangend = 0;
 	if (selectedStrip == 0) {strangstart = 0; strangend = strand.numPixels()-1;}
-	if (selectedStrip == 1) {strangstart = LEDSTRANG1_START; strangend = LEDSTRANG1_END;}
-	if (selectedStrip == 2) {strangstart = LEDSTRANG2_START; strangend = LEDSTRANG2_END;}
-	if (selectedStrip == 3) {strangstart = LEDSTRANG3_START; strangend = LEDSTRANG3_END;}
+	else {strangstart = getStripStart(selectedStrip, 3); strangend = getStripEnd(selectedStrip, 3);}
 	
-	for (int i = strangstart; i < strangend-1; i++) {
+	for (int i = strangstart; i < strangend; i++) {
 			strandReal.setPixelColor(i, strand.Color(0,0,0));
 	}
 	for (int i = 0; i < 3; i++) {
 		strandReal.setPixelColor(strangstart, strand.Color(0,0,255));
 		strandReal.setPixelColor(strangend, strand.Color(0,0,255));
     if (selectedStrip == 0) {
-      strandReal.setPixelColor(LEDSTRANG1_END, strand.Color(0,0,255));
-      strandReal.setPixelColor(LEDSTRANG2_START, strand.Color(0,0,255));
-      strandReal.setPixelColor(LEDSTRANG2_END, strand.Color(0,0,255));
-      strandReal.setPixelColor(LEDSTRANG3_START, strand.Color(0,0,255));
+      strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,0,255));
+      strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,0,255));
+      strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,0,255));
+      strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,0,255));
     }
 		strandReal.show();
 		delay(300);
@@ -1008,10 +980,10 @@ void showSelected() {
 		strandReal.setPixelColor(strangstart, strand.Color(0,0,0));
 		strandReal.setPixelColor(strangend, strand.Color(0,0,0));
 		if (selectedStrip == 0) {
-      strandReal.setPixelColor(LEDSTRANG1_END, strand.Color(0,0,0));
-      strandReal.setPixelColor(LEDSTRANG2_START, strand.Color(0,0,0));
-      strandReal.setPixelColor(LEDSTRANG2_END, strand.Color(0,0,0));
-      strandReal.setPixelColor(LEDSTRANG3_START, strand.Color(0,0,0));
+      strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,0,0));
+      strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,0,0));
+      strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,0,0));
+      strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,0,0));
     }
 		strandReal.show();
 		delay(150);
@@ -1044,35 +1016,37 @@ void CopyLEDContentAndApplyBrightness() {
       strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight * 1 ), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4));
     }
   
-	if (!isWholeVisualization) { //Copies the visualization to all 'instances'
-		for(int i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++)
+	if (virtualStripCount > 1) { //Copies the visualization to all 'instances'
+		for(int i = 0; i <= (getStripEnd(1) - getStripStart(1)); i++)
 		{
 			//Retrieve the color at the current position.
-			uint32_t col = strand.getPixelColor(LEDSTRANG1_START+i);
+			uint32_t col = strand.getPixelColor(getStripStart(1)+i);
 			float colors[3]; //Array of the three RGB values
 			for (int j = 0; j < 3; j++) colors[j] = split(col, j);
-		
-			strandReal.setPixelColor(LEDSTRANG1_START+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
-			strandReal.setPixelColor(LEDSTRANG2_START+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
-			strandReal.setPixelColor(LEDSTRANG3_START+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
+		    
+			for (int stranginforloop = 1; stranginforloop <= virtualStripCount+1; stranginforloop++) {
+				if ((int)stranginforloop/3 <= 1) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
+				else if ((int)stranginforloop/3 == 2) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
+				else if ((int)stranginforloop/3 >= 3) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
+			}
 		}
 		
 	} else if (shiftOneRight /*&& isWholeVisualization*/) { //Shifts all LED-blocks one to the right, so the visualization with all LEDs working together 
 															//works right in my setup. Basically moves the middle of the animation.
-		for(int i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++) {
-			uint32_t col1 = strand.getPixelColor(LEDSTRANG1_START+i);
+		for(int i = 0; i <= (getStripEnd(1, 3) - getStripStart(1, 3)); i++) {
+			uint32_t col1 = strand.getPixelColor(getStripStart(1, 3)+i);
 			float colors1[3]; //Array of the three RGB values for strang 1
 			for (int j = 0; j < 3; j++) colors1[j] = split(col1, j);
-			uint32_t col2 = strand.getPixelColor(LEDSTRANG2_START+i);
+			uint32_t col2 = strand.getPixelColor(getStripStart(2, 3)+i);
 			float colors2[3]; //Array of the three RGB values for strang 2
 			for (int j = 0; j < 3; j++) colors2[j] = split(col2, j);
-			uint32_t col3 = strand.getPixelColor(LEDSTRANG3_START+i);
+			uint32_t col3 = strand.getPixelColor(getStripStart(3, 3)+i);
 			float colors3[3]; //Array of the three RGB values for strang 3
 			for (int j = 0; j < 3; j++) colors3[j] = split(col3, j);
 			
-			strandReal.setPixelColor(LEDSTRANG1_START+i, colorCap(colors2[0] * brightness1 + staticBacklight * 1), colorCap(colors2[1] * brightness1 + staticBacklight), colorCap(colors2[2] * brightness1 + staticBacklight * 0.4));
-			strandReal.setPixelColor(LEDSTRANG2_START+i, colorCap(colors3[0] * brightness2 + staticBacklight * 1), colorCap(colors3[1] * brightness2 + staticBacklight), colorCap(colors3[2] * brightness2 + staticBacklight * 0.4));
-			strandReal.setPixelColor(LEDSTRANG3_START+i, colorCap(colors1[0] * brightness3 + staticBacklight * 1), colorCap(colors1[1] * brightness3 + staticBacklight), colorCap(colors1[2] * brightness3 + staticBacklight * 0.4));
+			strandReal.setPixelColor(getStripStart(1, 3)+i, colorCap(colors2[0] * brightness1 + staticBacklight * 1), colorCap(colors2[1] * brightness1 + staticBacklight), colorCap(colors2[2] * brightness1 + staticBacklight * 0.4));
+			strandReal.setPixelColor(getStripStart(2, 3)+i, colorCap(colors3[0] * brightness2 + staticBacklight * 1), colorCap(colors3[1] * brightness2 + staticBacklight), colorCap(colors3[2] * brightness2 + staticBacklight * 0.4));
+			strandReal.setPixelColor(getStripStart(3, 3)+i, colorCap(colors1[0] * brightness3 + staticBacklight * 1), colorCap(colors1[1] * brightness3 + staticBacklight), colorCap(colors1[2] * brightness3 + staticBacklight * 0.4));
 		}
 	}
 	
@@ -1083,6 +1057,32 @@ uint8_t colorCap(uint16_t givenColor) {
   else return 255;
 }
 
+uint16_t getStripStart(uint8_t stripNo) {
+	//Dynamically returns strip start for strip no. 'stripNo' - makes LEDSTRANG1_START etc obsolete.
+	return (LED_TOTAL/virtualStripCount)*(stripNo-1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:0 2:20 3:40
+}
+
+uint16_t getStripStart(uint8_t stripNo, uint8_t customStripCount) {
+	//Dynamically returns strip start for strip no. 'stripNo' - makes LEDSTRANG1_START etc obsolete.
+	return (LED_TOTAL/customStripCount)*(stripNo-1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:0 2:20 3:40
+}
+
+uint16_t getStripEnd(uint8_t stripNo) {
+	//Dynamically returns strip end for strip no. 'stripNo' - makes LEDSTRANG1_END etc obsolete.
+	return (getStripStart(stripNo+1) - 1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:19 2:39 3:59
+	//This forces getStripStart to calculate the start position of a none-existing strip **once** (the last call), so dont force impossible results to return -1!
+}
+
+uint16_t getStripEnd(uint8_t stripNo, uint8_t customStripCount) {
+	//Dynamically returns strip end for strip no. 'stripNo' - makes LEDSTRANG1_END etc obsolete.
+	return (getStripStart(stripNo+1, customStripCount) - 1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:19 2:39 3:59
+	//This forces getStripStart to calculate the start position of a none-existing strip **once** (the last call), so dont force impossible results to return -1!
+}
+
+uint16_t getStripMid(uint8_t stripNo) {
+	//Dynamically returns strip middle for strip no. 'stripNo' - makes LEDSTRANG1_HALF etc obsolete.
+	return getStripStart(stripNo) + (LED_TOTAL/virtualStripCount/2); 
+}
 
 
 //NEW: Central input management
@@ -1112,12 +1112,12 @@ void showKeyRecieved() {
 		for (int i = 1; i < strand.numPixels()-1; i++) {
 			strandReal.setPixelColor(i, strand.Color(0,0,0));
 		}
-		strandReal.setPixelColor(LEDSTRANG1_START, strand.Color(0,255,0));
-		strandReal.setPixelColor(LEDSTRANG1_END, strand.Color(0,255,0));
-		strandReal.setPixelColor(LEDSTRANG2_START, strand.Color(0,255,0));
-		strandReal.setPixelColor(LEDSTRANG2_END, strand.Color(0,255,0));
-		strandReal.setPixelColor(LEDSTRANG3_START, strand.Color(0,255,0));
-		strandReal.setPixelColor(LEDSTRANG3_END, strand.Color(0,255,0));
+		strandReal.setPixelColor(getStripStart(1, 3), strand.Color(0,255,0));
+		strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,255,0));
+		strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,255,0));
+		strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,255,0));
+		strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,255,0));
+		strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(0,255,0));
 		strandReal.show();
 		delay(KEYRECIEVE_NOTIFICATION_TIME);
 		for (int i = 0; i < strand.numPixels(); i++) {
@@ -1184,10 +1184,6 @@ void fade(float damper) {
   int boundLow = 0;
   int boundHigh = strand.numPixels();
   
-  if (!isWholeVisualization) {
-	  boundLow = LEDSTRANG1_START;
-	  boundHigh = LEDSTRANG1_END;
-  }
   
   for (int i = boundLow; i < boundHigh; i++) {
 
@@ -1214,10 +1210,6 @@ void bleed(uint8_t Point) {
   int boundLow = 1;
   int boundHigh = strand.numPixels();
   
-  if (!isWholeVisualization) {
-	  boundLow = LEDSTRANG1_START+1;
-	  boundHigh = LEDSTRANG1_END+1;
-  }
 	
   for (int i = boundLow; i < boundHigh; i++) {
 
