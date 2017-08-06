@@ -34,6 +34,10 @@
 ///////             ---> NOTE: Code **wont** work for strips with different LED ammount or probably for one strip any longer too. Use older version instead, see GitHub history.
 ///////             
 
+/////// TO DOs:
+///////           - 3 Modes: All in all, all strips one each, all strips three each
+///////           - Backlight (permanent static light)
+
 
 //////////Libraries
 #include <Adafruit_NeoPixel.h>  //Library to simplify interacting with the LED strand
@@ -96,9 +100,14 @@ uint8_t staticRed = 255; //Values for color for static light.
 uint8_t staticGreen = 255;
 uint8_t staticBlue = 255;
 uint8_t staticState = 0; //Value for current color state for static light.
+float timeBacklightChanged = 0;
+bool negBacklightChange = true;
 
 uint8_t selectedStrip = 0;
 bool isWholeVisualization = false; //Defines if strangs should be handled as one or as seperate ones
+uint8_t visualizationCopyCount = 1; //Defines, how many times the vis should be copied. Will make isWholeVisualization obsolete IN FUTURE - TODO.
+uint8_t staticBacklight = 5;
+bool staticBacklightEnabled = true; //Defines a static backlight so the room is never completely dark
 bool shiftOneRight = false; //Shifts all strangs one to the right. So it is 3->1->2
 
 //IMPORTANT:
@@ -174,6 +183,7 @@ void setup() {    //Like it's named, this gets ran before any other function.
   digitalWrite(INPUT_PIN3, LOW);
   digitalWrite(INPUT_PIN4, LOW);
   digitalWrite(INPUT_PIN5, LOW);*/
+  timeBacklightChanged = millis();
   
   strand.begin(); //Initialize the LED strand object.
   strandReal.begin();
@@ -261,6 +271,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   }
 
   Visualize();   //Calls the appropriate visualization to be displayed with the globals as they are.
+  controlBacklight();
   CopyLEDContentAndApplyBrightness();
   strandReal.show(); //This command actually shows the lights. NEW: Called here, not in the visualizations.
   
@@ -1009,8 +1020,20 @@ void showSelected() {
 	}
 }
 
+void controlBacklight() {
+  //staticBacklight
+  if (timeBacklightChanged+350 < millis()) {
+    //uint8_t whattodo = random(2);
+    timeBacklightChanged = millis();
+    if (!negBacklightChange) staticBacklight++;
+    else staticBacklight--;
+    if (staticBacklight < 5) {staticBacklight = 5; negBacklightChange = false;}
+    else if (staticBacklight > 12) {staticBacklight = 12; negBacklightChange = true;}
+  }
+}
+
 void CopyLEDContentAndApplyBrightness() {
-	//Copy content in general.
+	//Copy all content. Also applys staticBacklight.
   for(int i = 0; i < strand.numPixels(); i++)
     {
       //Retrieve the color at the current position.
@@ -1018,10 +1041,10 @@ void CopyLEDContentAndApplyBrightness() {
       float colors[3]; //Array of the three RGB values
       for (int j = 0; j < 3; j++) colors[j] = split(col, j);
     
-      strandReal.setPixelColor(i, colors[0], colors[1], colors[2]);
+      strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight * 1 ), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4));
     }
   
-	if (!isWholeVisualization) {
+	if (!isWholeVisualization) { //Copies the visualization to all 'instances'
 		for(int i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++)
 		{
 			//Retrieve the color at the current position.
@@ -1029,11 +1052,13 @@ void CopyLEDContentAndApplyBrightness() {
 			float colors[3]; //Array of the three RGB values
 			for (int j = 0; j < 3; j++) colors[j] = split(col, j);
 		
-			strandReal.setPixelColor(LEDSTRANG1_START+i, colors[0] * brightness1, colors[1] * brightness1, colors[2] * brightness1);
-			strandReal.setPixelColor(LEDSTRANG2_START+i, colors[0] * brightness2, colors[1] * brightness2, colors[2] * brightness2);
-			strandReal.setPixelColor(LEDSTRANG3_START+i, colors[0] * brightness3, colors[1] * brightness3, colors[2] * brightness3);
+			strandReal.setPixelColor(LEDSTRANG1_START+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
+			strandReal.setPixelColor(LEDSTRANG2_START+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
+			strandReal.setPixelColor(LEDSTRANG3_START+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
 		}
-	} else if (shiftOneRight /*&& isWholeVisualization*/) {
+		
+	} else if (shiftOneRight /*&& isWholeVisualization*/) { //Shifts all LED-blocks one to the right, so the visualization with all LEDs working together 
+															//works right in my setup. Basically moves the middle of the animation.
 		for(int i = 0; i <= (LEDSTRANG1_END - LEDSTRANG1_START); i++) {
 			uint32_t col1 = strand.getPixelColor(LEDSTRANG1_START+i);
 			float colors1[3]; //Array of the three RGB values for strang 1
@@ -1045,12 +1070,17 @@ void CopyLEDContentAndApplyBrightness() {
 			float colors3[3]; //Array of the three RGB values for strang 3
 			for (int j = 0; j < 3; j++) colors3[j] = split(col3, j);
 			
-			strandReal.setPixelColor(LEDSTRANG1_START+i, colors2[0] * brightness1, colors2[1] * brightness1, colors2[2] * brightness1);
-			strandReal.setPixelColor(LEDSTRANG2_START+i, colors3[0] * brightness2, colors3[1] * brightness2, colors3[2] * brightness2);
-			strandReal.setPixelColor(LEDSTRANG3_START+i, colors1[0] * brightness3, colors1[1] * brightness3, colors1[2] * brightness3);
+			strandReal.setPixelColor(LEDSTRANG1_START+i, colorCap(colors2[0] * brightness1 + staticBacklight * 1), colorCap(colors2[1] * brightness1 + staticBacklight), colorCap(colors2[2] * brightness1 + staticBacklight * 0.4));
+			strandReal.setPixelColor(LEDSTRANG2_START+i, colorCap(colors3[0] * brightness2 + staticBacklight * 1), colorCap(colors3[1] * brightness2 + staticBacklight), colorCap(colors3[2] * brightness2 + staticBacklight * 0.4));
+			strandReal.setPixelColor(LEDSTRANG3_START+i, colorCap(colors1[0] * brightness3 + staticBacklight * 1), colorCap(colors1[1] * brightness3 + staticBacklight), colorCap(colors1[2] * brightness3 + staticBacklight * 0.4));
 		}
 	}
 	
+}
+
+uint8_t colorCap(uint16_t givenColor) {
+  if (givenColor < 256) return givenColor;
+  else return 255;
 }
 
 
