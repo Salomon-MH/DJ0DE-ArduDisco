@@ -23,16 +23,36 @@
 #define OUT_PIN5  12
 
 //Settings
-#define SERIALDEBUGGING 0 //Should serial send debugging information? 0=FALSE 1=TRUE
+#define SERIALDEBUGGING 1 //Should serial send debugging information? 0=FALSE 1=TRUE
 
 //Digital output timeout time
 #define OUTPUT_TIME 70 //70 is a bit more than 2x the delay in loop() for the LED Arduino. Should be timeout enough!
 
 //IR HEX values
-uint32_t IR_signal_1 = 0x20DF04FB; //Used to be IR_CHANGEVISUAL //LG TV remote HEX values, change to your actual values!
-uint32_t IR_signal_2 = 0x20DF847B; //Used to be IR_CHANGECOLOR
-uint32_t IR_signal_3 = 0x20DFF906; //Used to be IR_CHANGEBRIGHTNESS
-uint32_t IR_signal_7 = 0x20DF4EB1;
+uint32_t IR_signal_01 = 0xFFA05F; //Sends signal 1 and so on binary. What will happen at keypress is decided by LEDArdu itself.
+uint32_t IR_signal_02 = 0xFF20DF;
+uint32_t IR_signal_03 = 0xFF609F;
+uint32_t IR_signal_04 = 0xFFE01F;
+uint32_t IR_signal_05 = 0xFF906F;
+uint32_t IR_signal_06 = 0xFF10EF;
+uint32_t IR_signal_07 = 0xFF50AF;
+uint32_t IR_signal_08 = 0xFFD02F;
+uint32_t IR_signal_09 = 0xFFB04F;
+uint32_t IR_signal_10 = 0xFF30CF;
+uint32_t IR_signal_11 = 0xFF708F;
+uint32_t IR_signal_12 = 0xFFF00F;
+uint32_t IR_signal_13 = 0xFFA857;
+uint32_t IR_signal_14 = 0xFF28D7;
+uint32_t IR_signal_15 = 0xFF6897;
+uint32_t IR_signal_16 = 0xFFE817;
+uint32_t IR_signal_17 = 0xFF9867;
+uint32_t IR_signal_18 = 0xFF18E7;
+uint32_t IR_signal_19 = 0xFF58A7;
+uint32_t IR_signal_20 = 0xFFD827;
+uint32_t IR_signal_21 = 0xFF8877;
+uint32_t IR_signal_22 = 0xFF08F7;
+uint32_t IR_signal_23 = 0xFF48B7;
+uint32_t IR_signal_24 = 0xFFC837;
 
 //Infrared
 IRrecv irrecv(IR_PIN);
@@ -88,10 +108,31 @@ void loop() {
 
 void encodeSignal() {
 	int recievedValue = -1;
-	if(irValue == IR_signal_1) recievedValue = 1;
-  else if(irValue == IR_signal_2) recievedValue = 2;
-  else if(irValue == IR_signal_3) recievedValue = 3;
-  else if(irValue == IR_signal_7) recievedValue = 7;
+	if(irValue == IR_signal_01) recievedValue = 1;
+  else if(irValue == IR_signal_02) recievedValue = 2;
+  else if(irValue == IR_signal_03) recievedValue = 3;
+  else if(irValue == IR_signal_04) recievedValue = 4;
+  else if(irValue == IR_signal_05) recievedValue = 5;
+  else if(irValue == IR_signal_06) recievedValue = 6;
+  else if(irValue == IR_signal_07) recievedValue = 7;
+  else if(irValue == IR_signal_08) recievedValue = 8;
+  else if(irValue == IR_signal_09) recievedValue = 9;
+  else if(irValue == IR_signal_10) recievedValue = 10;
+  else if(irValue == IR_signal_11) recievedValue = 11;
+  else if(irValue == IR_signal_12) recievedValue = 12;
+  else if(irValue == IR_signal_13) recievedValue = 13;
+  else if(irValue == IR_signal_14) recievedValue = 14;
+  else if(irValue == IR_signal_15) recievedValue = 15;
+  else if(irValue == IR_signal_16) recievedValue = 16;
+  else if(irValue == IR_signal_17) recievedValue = 17;
+  else if(irValue == IR_signal_18) recievedValue = 18;
+  else if(irValue == IR_signal_19) recievedValue = 19;
+  else if(irValue == IR_signal_20) recievedValue = 20;
+  else if(irValue == IR_signal_21) recievedValue = 21;
+  else if(irValue == IR_signal_22) recievedValue = 22;
+  else if(irValue == IR_signal_23) recievedValue = 23;
+  else if(irValue == IR_signal_24) recievedValue = 24;
+  
 
   if (SERIALDEBUGGING) Serial.println(irValue, HEX); 
   //Serial.println(recievedValue);

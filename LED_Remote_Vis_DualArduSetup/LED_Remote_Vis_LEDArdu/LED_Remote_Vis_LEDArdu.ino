@@ -108,7 +108,7 @@ bool negBacklightChange = true;
 
 uint8_t selectedStrip = 0;
 //bool isWholeVisualization = false; //OBSOLETE + UNUSED: Defines if strangs should be handled as one or as seperate ones
-uint8_t virtualStripCount = 9; //Defines, how many times the vis should be copied. Makes isWholeVisualization obsolete.
+uint8_t virtualStripCount = 3; //Defines, how many times the vis should be copied. Makes isWholeVisualization obsolete.
 uint8_t staticBacklight = 5;
 bool staticBacklightEnabled = true; //Defines a static backlight so the room is never completely dark
 bool shiftOneRight = false; //Shifts all strangs one to the right. So it is 3->1->2
@@ -286,6 +286,382 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 }
 
 //////////</Standard Functions>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////     INPUT CALC     //////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//NEW: Central input management
+bool ProcessInput() {
+  if (powerstate == 0 && decodedInput == 4) turnOn(); //If turned off, only on-button works.
+  else if (powerstate == 1) { //Powered on in normal mode
+    switch(decodedInput) {
+      case 1: showKeyRecieved(); ChangeBrightness(0.1); return true;
+      case 2: showKeyRecieved(); ChangeBrightness(-0.1); return true;
+      case 3: showKeyRecieved(); turnOff(); return true;
+      case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
+      case 5: setStaticColor(255, 0, 0); return true; //Red
+      case 6: setStaticColor(0, 255, 0); return true; //Green
+      case 7: setStaticColor(0, 0, 255); return true; //Blue
+      case 8: setStaticColor(255, 255, 255); return true; //White
+      case 9: setStaticColor(255, 55, 0); return true; //redish orange
+      case 10: setStaticColor(50, 205, 50); return true; //lime
+      case 11: setStaticColor(0, 148, 255); return true; //ocean blue
+      case 12: showKeyRecieved(); CycleVisual(); return true;
+      case 13: setStaticColor(255, 100, 0); return true; //orange
+      case 14: setStaticColor(150, 255, 255); return true; //bright aqua
+      case 15: LoadCustomColor(); return true; //custom color
+      case 16: showKeyRecieved(); ChangeRepCount(); return true;
+      case 17: setStaticColor(255, 158, 94); return true; //bright orange
+      case 18: setStaticColor(0, 255, 255); return true; //aqua
+      case 19: setStaticColor(72, 0, 255); return true; //purple
+      case 20: CycleSelection(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
+      case 21: setStaticColor(255, 216, 0); return true; //yellow
+      case 22: setStaticColor(0, 195, 255); return true; //dark aqua
+      case 23: setStaticColor(255, 0, 110); return true; //pink
+      case 24: showKeyRecieved(); CyclePalette(); return true;
+    }
+  } else if (powerstate == 2) { //Settings mode
+    switch(decodedInput) {
+      case 1: showKeyRecieved(); ChangeBacklightBrightness(2); return true;
+      case 2: showKeyRecieved(); ChangeBacklightBrightness(-2); return true;
+      case 3: showKeyRecieved(); turnOff(); return true;
+      case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
+      case 5: showKeyRecieved(); ChangeStaticRed(5); return true;
+      case 6: showKeyRecieved(); ChangeStaticGreen(5); return true;
+      case 7: showKeyRecieved(); ChangeStaticBlue(5); return true;
+      case 8: showKeyRecieved(); LoadCustomColor(); return true;
+      case 9: showKeyRecieved(); ChangeStaticRed(-5); return true;
+      case 10: showKeyRecieved(); ChangeStaticGreen(-5); return true;
+      case 11: showKeyRecieved(); ChangeStaticBlue(-5); return true;
+      case 12: showKeyRecieved(); SaveCustomColor(); return true;
+      case 13: return false;
+      case 14: return false;
+      case 15: return false;
+      case 16: showKeyRecieved(); ToggleRightshift(); return true;
+      case 17: return false;
+      case 18: return false;
+      case 19: return false;
+      case 20: showKeyRecieved(); SaveToEEPROM(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
+      case 21: return false;
+      case 22: return false;
+      case 23: showKeyRecieved(); ToggleshowKeyRecieved(); return true;
+      case 24: showKeyRecieved(); delay(150); showKeyRecieved(); restoreDefaults(); return true;
+    }
+  }
+}
+
+//Color cycling
+void CyclePalette() {
+
+    if (SERIALDEBUGGING) Serial.println("Changing Palette!");
+    
+    if (isStaticLight) {
+    switch (staticState)
+    {
+    case 0: staticRed = 255; staticGreen = 0; staticBlue = 0; staticState = 1; break;//Switch to Red 1
+    case 1: staticRed = 0; staticGreen = 255; staticBlue = 0; staticState = 2; break;//Switch to Green 2
+    case 2: staticRed = 0; staticGreen = 0; staticBlue = 255; staticState = 3; break;//Switch to Blue 3
+    case 3: staticRed = 255; staticGreen = 100; staticBlue = 0; staticState = 4; break;//Switch to Orange 4
+    case 4: staticRed = 0; staticGreen = 255; staticBlue = 255; staticState = 5; break;//Switch to Aqua 5
+    case 5: staticRed = 72; staticGreen = 0; staticBlue = 255; staticState = 6; break;//Switch to Purple 6
+    case 6: staticRed = 255; staticGreen = 216; staticBlue = 0; staticState = 7; break;//Switch to Yellow 7
+    case 7: staticRed = 255; staticGreen = 0; staticBlue = 110; staticState = 8; break;//Switch to Pink 8
+    case 8: staticRed = 50; staticGreen = 205; staticBlue = 50; staticState = 9; break;//Switch to Lime 9
+    case 9: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
+    default: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
+    }
+    if (SERIALDEBUGGING) Serial.print("Switched static light to ");
+    if (SERIALDEBUGGING) Serial.println(staticState);
+  } else {
+  
+  palette++;  //change the color palette.
+
+    //If palette is larger than the population of thresholds[], start back at 0
+    //  This is why it's important you add a threshold to the array if you add a
+    //  palette, or the program will cylce back to Rainbow() before reaching it.
+    if (palette >= sizeof(thresholds) / 2) palette = 0;
+
+    gradient %= thresholds[palette]; //Modulate gradient to prevent any overflow that may occur.
+
+    maxVol = avgVol;  //Set max volume to average for a fresh experience.
+  }
+
+}
+
+void setStaticColor(uint8_t redval, uint8_t greenval, uint8_t blueval) {
+  isStaticLight = true;
+  staticRed = redval;
+  staticGreen = greenval;
+  staticBlue = blueval;
+}
+
+void CycleVisual() {
+
+    if (SERIALDEBUGGING) Serial.println("Changing Visual!");
+
+    visual++;     //change the visual mode
+
+    gradient = 0; //Prevent overflow
+
+    //Resets "visual" if there are no more visuals to cycle through.
+    if (visual > VISUALS) visual = 0;
+    //This is why you should change "VISUALS" if you add a visual, or the program loop over it.
+
+    //Resets the positions of all dots to nonexistent (-2) if you cycle to the Traffic() visual.
+    if (visual == 1) memset(pos, -2, sizeof(pos));
+
+    //Gives Snake() and PaletteDance() visuals a random starting point if cycled to.
+    int boundLow = getStripStart(1);
+    int boundHigh = getStripEnd(1)+1;
+  
+  if (visual == 2 || visual == 3) {
+      randomSeed(analogRead(0));
+      dotPos = random(boundHigh);
+    }
+
+    maxVol = avgVol; //Set max volume to average for a fresh experience
+
+}
+
+
+void ChangeBrightness(double modifier) {
+
+  //If infrared is recieved and matches with IR_CHANGEBRIGHTNESS, action is performed
+    if (SERIALDEBUGGING) {Serial.print("Changing Brightness with factor "); Serial.print(modifier); Serial.print(" on stip == "); Serial.println(selectedStrip);}
+  if (selectedStrip == 0) {
+    brightness0 += modifier;
+    if (brightness0 > 1) brightness0 = 1;
+    else if (brightness0 < 0.1) brightness0 = 0.1;
+    
+  } else if (selectedStrip == 1) {
+    brightness1 += modifier;
+    if (brightness1 > 1) brightness1 = 1;
+    else if (brightness1 < 0.1) brightness1 = 0.1;
+    
+  } else if (selectedStrip == 2) {
+    brightness2 += modifier;
+    if (brightness2 > 1) brightness2 = 1;
+    else if (brightness2 < 0.1) brightness2 = 0.1;
+    
+  } else if (selectedStrip == 3) {
+    brightness3 += modifier;
+    if (brightness3 > 1) brightness3 = 1;
+    else if (brightness3 < 0.1) brightness3 = 0.1;
+  }
+}
+
+void turnOff() {
+  showKeyRecieved();
+    if(brightness0 == 0) brightness0 = 1;
+    else brightness0 = 0;
+}
+
+void turnOn() {
+  showKeyRecieved();
+    if(brightness0 == 0) brightness0 = 1;
+    else brightness0 = 0;
+}
+
+void CycleSelection() {
+  if (SERIALDEBUGGING) Serial.println("Switching selection!");
+  if (selectedStrip == 3) selectedStrip = 0;
+  else selectedStrip++;
+  showSelected();
+}
+
+void showSelected() {
+  int strangstart = 0;
+  int strangend = 0;
+  if (selectedStrip == 0) {strangstart = 0; strangend = strand.numPixels()-1;}
+  else {strangstart = getStripStart(selectedStrip, 3); strangend = getStripEnd(selectedStrip, 3);}
+  
+  for (int i = strangstart; i < strangend; i++) {
+      strandReal.setPixelColor(i, strand.Color(0,0,0));
+  }
+  for (int i = 0; i < 3; i++) {
+    strandReal.setPixelColor(strangstart, strand.Color(0,0,255));
+    strandReal.setPixelColor(strangend, strand.Color(0,0,255));
+    if (selectedStrip == 0) {
+      strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,0,255));
+      strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,0,255));
+      strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,0,255));
+      strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,0,255));
+    }
+    strandReal.show();
+    delay(300);
+    decodeInput();
+    if (ProcessInput()) break; //Breaks if new key is detected
+    strandReal.setPixelColor(strangstart, strand.Color(0,0,0));
+    strandReal.setPixelColor(strangend, strand.Color(0,0,0));
+    if (selectedStrip == 0) {
+      strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,0,0));
+      strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,0,0));
+      strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,0,0));
+      strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,0,0));
+    }
+    strandReal.show();
+    delay(150);
+    decodeInput();
+    if (ProcessInput()) break; //Breaks if new key is detected
+  }
+}
+
+void controlBacklight() {
+  //staticBacklight
+  if (timeBacklightChanged+350 < millis()) {
+    //uint8_t whattodo = random(2);
+    timeBacklightChanged = millis();
+    if (!negBacklightChange) staticBacklight++;
+    else staticBacklight--;
+    if (staticBacklight < 5) {staticBacklight = 5; negBacklightChange = false;}
+    else if (staticBacklight > 12) {staticBacklight = 12; negBacklightChange = true;}
+  }
+}
+
+void CopyLEDContentAndApplyBrightness() {
+  //Copy all content. Also applys staticBacklight.
+  for(int i = 0; i < strand.numPixels(); i++)
+    {
+      //Retrieve the color at the current position.
+      uint32_t col = strand.getPixelColor(i);
+      float colors[3]; //Array of the three RGB values
+      for (int j = 0; j < 3; j++) colors[j] = split(col, j);
+    
+      strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight * 1 ), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4));
+    }
+  
+  if (virtualStripCount > 1) { //Copies the visualization to all 'instances'
+    for(int i = 0; i <= (getStripEnd(1) - getStripStart(1)); i++)
+    {
+      //Retrieve the color at the current position.
+      uint32_t col = strand.getPixelColor(getStripStart(1)+i);
+      float colors[3]; //Array of the three RGB values
+      for (int j = 0; j < 3; j++) colors[j] = split(col, j);
+        
+      for (int stranginforloop = 1; stranginforloop <= virtualStripCount; stranginforloop++) {
+        if ((int)stranginforloop/3 <= 1) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
+        else if ((int)stranginforloop/3 == 2) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
+        else if ((int)stranginforloop/3 >= 3) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
+      }
+    }
+    
+  } else if (shiftOneRight /*&& isWholeVisualization*/) { //Shifts all LED-blocks one to the right, so the visualization with all LEDs working together 
+                              //works right in my setup. Basically moves the middle of the animation.
+    for(int i = 0; i <= (getStripEnd(1, 3) - getStripStart(1, 3)); i++) {
+      uint32_t col1 = strand.getPixelColor(getStripStart(1, 3)+i);
+      float colors1[3]; //Array of the three RGB values for strang 1
+      for (int j = 0; j < 3; j++) colors1[j] = split(col1, j);
+      uint32_t col2 = strand.getPixelColor(getStripStart(2, 3)+i);
+      float colors2[3]; //Array of the three RGB values for strang 2
+      for (int j = 0; j < 3; j++) colors2[j] = split(col2, j);
+      uint32_t col3 = strand.getPixelColor(getStripStart(3, 3)+i);
+      float colors3[3]; //Array of the three RGB values for strang 3
+      for (int j = 0; j < 3; j++) colors3[j] = split(col3, j);
+      
+      strandReal.setPixelColor(getStripStart(1, 3)+i, colorCap(colors2[0] * brightness1 + staticBacklight * 1), colorCap(colors2[1] * brightness1 + staticBacklight), colorCap(colors2[2] * brightness1 + staticBacklight * 0.4));
+      strandReal.setPixelColor(getStripStart(2, 3)+i, colorCap(colors3[0] * brightness2 + staticBacklight * 1), colorCap(colors3[1] * brightness2 + staticBacklight), colorCap(colors3[2] * brightness2 + staticBacklight * 0.4));
+      strandReal.setPixelColor(getStripStart(3, 3)+i, colorCap(colors1[0] * brightness3 + staticBacklight * 1), colorCap(colors1[1] * brightness3 + staticBacklight), colorCap(colors1[2] * brightness3 + staticBacklight * 0.4));
+    }
+  }
+  
+}
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////   INPUT HELPERS    //////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint8_t colorCap(uint16_t givenColor) {
+  if (givenColor < 256) return givenColor;
+  else return 255;
+}
+
+uint16_t getStripStart(uint8_t stripNo) {
+  //Dynamically returns strip start for strip no. 'stripNo' - makes LEDSTRANG1_START etc obsolete.
+  return (LED_TOTAL/virtualStripCount)*(stripNo-1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:0 2:20 3:40
+}
+
+uint16_t getStripStart(uint8_t stripNo, uint8_t customStripCount) {
+  //Dynamically returns strip start for strip no. 'stripNo' - makes LEDSTRANG1_START etc obsolete.
+  return (LED_TOTAL/customStripCount)*(stripNo-1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:0 2:20 3:40
+}
+
+uint16_t getStripEnd(uint8_t stripNo) {
+  //Dynamically returns strip end for strip no. 'stripNo' - makes LEDSTRANG1_END etc obsolete.
+  return (getStripStart(stripNo+1) - 1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:19 2:39 3:59
+  //This forces getStripStart to calculate the start position of a none-existing strip **once** (the last call), so dont force impossible results to return -1!
+}
+
+uint16_t getStripEnd(uint8_t stripNo, uint8_t customStripCount) {
+  //Dynamically returns strip end for strip no. 'stripNo' - makes LEDSTRANG1_END etc obsolete.
+  return (getStripStart(stripNo+1, customStripCount) - 1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:19 2:39 3:59
+  //This forces getStripStart to calculate the start position of a none-existing strip **once** (the last call), so dont force impossible results to return -1!
+}
+
+uint16_t getStripMid(uint8_t stripNo) {
+  //Dynamically returns strip middle for strip no. 'stripNo' - makes LEDSTRANG1_HALF etc obsolete.
+  return getStripStart(stripNo) + (LED_TOTAL/virtualStripCount/2); 
+}
+
+
+
+// VISUAL EFFECT TO SHOW THAT A KEYSTROKE IS NOTICED.
+void showKeyRecieved() {
+  if (KEYRECIEVE_NOTIFICATION_TIME != 0)
+  {
+    for (int i = 1; i < strand.numPixels()-1; i++) {
+      strandReal.setPixelColor(i, strand.Color(0,0,0));
+    }
+    strandReal.setPixelColor(getStripStart(1, 3), strand.Color(0,255,0));
+    strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,255,0));
+    strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,255,0));
+    strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,255,0));
+    strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,255,0));
+    strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(0,255,0));
+    strandReal.show();
+    delay(KEYRECIEVE_NOTIFICATION_TIME);
+    for (int i = 0; i < strand.numPixels(); i++) {
+      strandReal.setPixelColor(i, strand.Color(0,0,0));
+    }
+    strandReal.show();
+  }
+
+}
+
+// VISUAL EFFECT TO SHOW THAT LISTENING TO IR STARTED (LEGACY AND NO LONGER NEEDED)
+/*void showIRisListening() {
+  for (int i = 1; i < strand.numPixels()-1; i++) {
+    strand.setPixelColor(i, strand.Color(0,0,0));
+  }
+  strand.setPixelColor(0, strand.Color(60,0,0));
+  strand.setPixelColor(strand.numPixels()-1, strand.Color(60,0,0));
+  strand.show();
+}*/
+
+// Method to decode the input given by IRArdu
+void decodeInput() {
+  recevInput[0] = digitalRead(INPUT_PIN1); //Read the values from the PINs.
+  recevInput[1] = digitalRead(INPUT_PIN2);
+  recevInput[2] = digitalRead(INPUT_PIN3);
+  recevInput[3] = 0; //digitalRead(INPUT_PIN4);
+  recevInput[4] = 0; //digitalRead(INPUT_PIN5); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
+  if (SERIALDEBUGGING && (recevInput[0] || recevInput[1] || recevInput[2])) {Serial.print("Raw Input: "); Serial.print(recevInput[0]); Serial.print(recevInput[1]); Serial.println(recevInput[2]);}
+  decodedInput = 0;
+  for (int i = 0; i < INPUT_COUNT; i++) { //Decode the input.
+    if (recevInput[i])
+    {
+      decodedInput += (pow(2, i)+0.1); //Adds the equivalent number to the result. Pin1: +1, Pin2: +2, Pin3: +4, ...
+      if (SERIALDEBUGGING) {Serial.print("Input "); Serial.print(i); Serial.print(" is true, adding "); Serial.print(pow(2, i)); Serial.print(" to "); Serial.println(decodedInput);}
+    }
+  } 
+  
+  if (SERIALDEBUGGING && decodedInput != 0) {Serial.print("Decoded Input: "); Serial.println(decodedInput);}
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -758,422 +1134,6 @@ void LoopThrough() {
 
 //////////<Helper Functions>
 
-void CyclePalette() {
-
-  //IMPORTANT: Delete this whole if-block if you didn't use buttons//////////////////////////////////
-
-  //If the binary number 1 is recieved via inputs, action is performed
-    if (SERIALDEBUGGING) Serial.println("Changing Palette!");
-    showKeyRecieved();
-    if (isStaticLight) {
-    switch (staticState)
-    {
-    case 0: staticRed = 255; staticGreen = 0; staticBlue = 0; staticState = 1; break;//Switch to Red 1
-    case 1: staticRed = 0; staticGreen = 255; staticBlue = 0; staticState = 2; break;//Switch to Green 2
-    case 2: staticRed = 0; staticGreen = 0; staticBlue = 255; staticState = 3; break;//Switch to Blue 3
-    case 3: staticRed = 255; staticGreen = 100; staticBlue = 0; staticState = 4; break;//Switch to Orange 4
-    case 4: staticRed = 0; staticGreen = 255; staticBlue = 255; staticState = 5; break;//Switch to Aqua 5
-    case 5: staticRed = 72; staticGreen = 0; staticBlue = 255; staticState = 6; break;//Switch to Purple 6
-    case 6: staticRed = 255; staticGreen = 216; staticBlue = 0; staticState = 7; break;//Switch to Yellow 7
-    case 7: staticRed = 255; staticGreen = 0; staticBlue = 110; staticState = 8; break;//Switch to Pink 8
-    case 8: staticRed = 50; staticGreen = 205; staticBlue = 50; staticState = 9; break;//Switch to Lime 9
-    case 9: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
-    default: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
-    }
-    if (SERIALDEBUGGING) Serial.print("Switched static light to ");
-    if (SERIALDEBUGGING) Serial.println(staticState);
-  } else {
-  
-  palette++;     //This is this button's purpose, to change the color palette.
-
-    //If palette is larger than the population of thresholds[], start back at 0
-    //  This is why it's important you add a threshold to the array if you add a
-    //  palette, or the program will cylce back to Rainbow() before reaching it.
-    if (palette >= sizeof(thresholds) / 2) palette = 0;
-
-    gradient %= thresholds[palette]; //Modulate gradient to prevent any overflow that may occur.
-
-    //The button is close to the microphone on my setup, so the sound of pushing it is
-    //  relatively loud to the sound detector. This causes the visual to think a loud noise
-    //  happened, so the delay simply allows the sound of the button to pass unabated.
-    //delay(350);
-
-    maxVol = avgVol;  //Set max volume to average for a fresh experience.
-  }
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-  //If shuffle mode is on, and it's been 30 seconds since the last shuffle, and then a modulo
-  //  of gradient to get a random decision between palette or visualization shuffle
-  /*if (shuffle && millis() / 1000.0 - shuffleTime > 30 && gradient % 2) {
-
-    shuffleTime = millis() / 1000.0; //Record the time this shuffle happened.
-
-    palette++;
-    if (palette >= sizeof(thresholds) / 2) palette = 0;
-    gradient %= thresholds[palette];
-    maxVol = avgVol;  //Set the max volume to average for a fresh experience.
-  }*/
-}
-
-
-void CycleVisual() {
-
-    if (SERIALDEBUGGING) Serial.println("Changing Visual!");
-    showKeyRecieved();
-    visual++;     //The purpose of this button: change the visual mode
-    //Serial.println(visual);
-
-    gradient = 0; //Prevent overflow
-
-    //Resets "visual" if there are no more visuals to cycle through.
-    if (visual > VISUALS) visual = 0;
-    //This is why you should change "VISUALS" if you add a visual, or the program loop over it.
-
-    //Resets the positions of all dots to nonexistent (-2) if you cycle to the Traffic() visual.
-    if (visual == 1) memset(pos, -2, sizeof(pos));
-
-    //Gives Snake() and PaletteDance() visuals a random starting point if cycled to.
-    int boundLow = getStripStart(1);
-    int boundHigh = getStripEnd(1)+1;
-	
-	if (visual == 2 || visual == 3) {
-      randomSeed(analogRead(0));
-      dotPos = random(boundHigh);
-    }
-
-    //Like before, this delay is to prevent a button press from affecting "maxVol."
-    //delay(350);
-
-    maxVol = avgVol; //Set max volume to average for a fresh experience
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-  //If shuffle mode is on, and it's been 30 seconds since the last shuffle, and then a modulo
-  //  of gradient WITH INVERTED LOGIC to get a random decision between what to shuffle.
-  //  This guarantees one and only one of these shuffles will occur.
-  /*if (shuffle && millis() / 1000.0 - shuffleTime > 30 && !(gradient % 2)) {
-
-    shuffleTime = millis() / 1000.0; //Record the time this shuffle happened.
-
-    visual++;
-    gradient = 0;
-    if (visual > VISUALS) visual = 0;
-    if (visual == 1) memset(pos, -2, sizeof(pos));
-    if (visual == 2 || visual == 3) {
-      randomSeed(analogRead(0));
-      dotPos = random(strand.numPixels());
-    }
-    maxVol = avgVol;
-  }*/
-}
-
-
-void CycleBrightness() {
-
-  //If infrared is recieved and matches with IR_CHANGEBRIGHTNESS, action is performed
-    if (SERIALDEBUGGING) Serial.println("Changing Brightness!");
-    showKeyRecieved();
-	if (selectedStrip == 0) {
-		switch ((int)(brightness0*10)) {
-			case 10: brightness0 = 0.9; break;
-			case 9: brightness0 = 0.8; break;
-			case 8: brightness0 = 0.7; break;
-			case 7: brightness0 = 0.6; break;
-			case 6: brightness0 = 0.5; break;
-			case 5: brightness0 = 0.4; break;
-			case 4: brightness0 = 0.3; break;
-			case 3: brightness0 = 0.2; break;
-			case 2: brightness0 = 0.1; break;
-			case 1: brightness0 = 0.0; break;
-			case 0: brightness0 = 1; break;
-			default: brightness0 = 1.0; break;
-		}
-	} else if (selectedStrip == 1) {
-		switch ((int)(brightness1*10)) {
-			case 10: brightness1 = 0.9; break;
-			case 9: brightness1 = 0.8; break;
-			case 8: brightness1 = 0.7; break;
-			case 7: brightness1 = 0.6; break;
-			case 6: brightness1 = 0.5; break;
-			case 5: brightness1 = 0.4; break;
-			case 4: brightness1 = 0.3; break;
-			case 3: brightness1 = 0.2; break;
-			case 2: brightness1 = 0.1; break;
-			case 1: brightness1 = 0.0; break;
-			case 0: brightness1 = 1; break;
-			default: brightness1 = 1.0; break;
-		}
-	} else if (selectedStrip == 2) {
-		switch ((int)(brightness2*10)) {
-			case 10: brightness2 = 0.9; break;
-			case 9: brightness2 = 0.8; break;
-			case 8: brightness2 = 0.7; break;
-			case 7: brightness2 = 0.6; break;
-			case 6: brightness2 = 0.5; break;
-			case 5: brightness2 = 0.4; break;
-			case 4: brightness2 = 0.3; break;
-			case 3: brightness2 = 0.2; break;
-			case 2: brightness2 = 0.1; break;
-			case 1: brightness2 = 0.0; break;
-			case 0: brightness2 = 1; break;
-			default: brightness2 = 1.0; break;
-		}
-	} else if (selectedStrip == 3) {
-		switch ((int)(brightness3*10)) {
-			case 10: brightness3 = 0.9; break;
-			case 9: brightness3 = 0.8; break;
-			case 8: brightness3 = 0.7; break;
-			case 7: brightness3 = 0.6; break;
-			case 6: brightness3 = 0.5; break;
-			case 5: brightness3 = 0.4; break;
-			case 4: brightness3 = 0.3; break;
-			case 3: brightness3 = 0.2; break;
-			case 2: brightness3 = 0.1; break;
-			case 1: brightness3 = 0.0; break;
-			case 0: brightness3 = 1; break;
-			default: brightness3 = 1.0; break;
-		}
-	}
-}
-
-void turnOff() {
-	showKeyRecieved();
-    if(brightness0 == 0) brightness0 = 1;
-    else brightness0 = 0;
-}
-
-void turnOn() {
-	showKeyRecieved();
-    if(brightness0 == 0) brightness0 = 1;
-    else brightness0 = 0;
-}
-
-void CycleSelection() {
-	if (SERIALDEBUGGING) Serial.println("Switching selection!");
-	if (selectedStrip == 3) selectedStrip = 0;
-	else selectedStrip++;
-	showSelected();
-}
-
-void showSelected() {
-	int strangstart = 0;
-	int strangend = 0;
-	if (selectedStrip == 0) {strangstart = 0; strangend = strand.numPixels()-1;}
-	else {strangstart = getStripStart(selectedStrip, 3); strangend = getStripEnd(selectedStrip, 3);}
-	
-	for (int i = strangstart; i < strangend; i++) {
-			strandReal.setPixelColor(i, strand.Color(0,0,0));
-	}
-	for (int i = 0; i < 3; i++) {
-		strandReal.setPixelColor(strangstart, strand.Color(0,0,255));
-		strandReal.setPixelColor(strangend, strand.Color(0,0,255));
-    if (selectedStrip == 0) {
-      strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,0,255));
-      strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,0,255));
-      strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,0,255));
-      strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,0,255));
-    }
-		strandReal.show();
-		delay(300);
-		decodeInput();
-		if (ProcessInput()) break; //Breaks if new key is detected
-		strandReal.setPixelColor(strangstart, strand.Color(0,0,0));
-		strandReal.setPixelColor(strangend, strand.Color(0,0,0));
-		if (selectedStrip == 0) {
-      strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,0,0));
-      strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,0,0));
-      strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,0,0));
-      strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,0,0));
-    }
-		strandReal.show();
-		delay(150);
-		decodeInput();
-		if (ProcessInput()) break; //Breaks if new key is detected
-	}
-}
-
-void controlBacklight() {
-  //staticBacklight
-  if (timeBacklightChanged+350 < millis()) {
-    //uint8_t whattodo = random(2);
-    timeBacklightChanged = millis();
-    if (!negBacklightChange) staticBacklight++;
-    else staticBacklight--;
-    if (staticBacklight < 5) {staticBacklight = 5; negBacklightChange = false;}
-    else if (staticBacklight > 12) {staticBacklight = 12; negBacklightChange = true;}
-  }
-}
-
-void CopyLEDContentAndApplyBrightness() {
-	//Copy all content. Also applys staticBacklight.
-  for(int i = 0; i < strand.numPixels(); i++)
-    {
-      //Retrieve the color at the current position.
-      uint32_t col = strand.getPixelColor(i);
-      float colors[3]; //Array of the three RGB values
-      for (int j = 0; j < 3; j++) colors[j] = split(col, j);
-    
-      strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight * 1 ), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4));
-    }
-  
-	if (virtualStripCount > 1) { //Copies the visualization to all 'instances'
-		for(int i = 0; i <= (getStripEnd(1) - getStripStart(1)); i++)
-		{
-			//Retrieve the color at the current position.
-			uint32_t col = strand.getPixelColor(getStripStart(1)+i);
-			float colors[3]; //Array of the three RGB values
-			for (int j = 0; j < 3; j++) colors[j] = split(col, j);
-		    
-			for (int stranginforloop = 1; stranginforloop <= virtualStripCount+1; stranginforloop++) {
-				if ((int)stranginforloop/3 <= 1) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
-				else if ((int)stranginforloop/3 == 2) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
-				else if ((int)stranginforloop/3 >= 3) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
-			}
-		}
-		
-	} else if (shiftOneRight /*&& isWholeVisualization*/) { //Shifts all LED-blocks one to the right, so the visualization with all LEDs working together 
-															//works right in my setup. Basically moves the middle of the animation.
-		for(int i = 0; i <= (getStripEnd(1, 3) - getStripStart(1, 3)); i++) {
-			uint32_t col1 = strand.getPixelColor(getStripStart(1, 3)+i);
-			float colors1[3]; //Array of the three RGB values for strang 1
-			for (int j = 0; j < 3; j++) colors1[j] = split(col1, j);
-			uint32_t col2 = strand.getPixelColor(getStripStart(2, 3)+i);
-			float colors2[3]; //Array of the three RGB values for strang 2
-			for (int j = 0; j < 3; j++) colors2[j] = split(col2, j);
-			uint32_t col3 = strand.getPixelColor(getStripStart(3, 3)+i);
-			float colors3[3]; //Array of the three RGB values for strang 3
-			for (int j = 0; j < 3; j++) colors3[j] = split(col3, j);
-			
-			strandReal.setPixelColor(getStripStart(1, 3)+i, colorCap(colors2[0] * brightness1 + staticBacklight * 1), colorCap(colors2[1] * brightness1 + staticBacklight), colorCap(colors2[2] * brightness1 + staticBacklight * 0.4));
-			strandReal.setPixelColor(getStripStart(2, 3)+i, colorCap(colors3[0] * brightness2 + staticBacklight * 1), colorCap(colors3[1] * brightness2 + staticBacklight), colorCap(colors3[2] * brightness2 + staticBacklight * 0.4));
-			strandReal.setPixelColor(getStripStart(3, 3)+i, colorCap(colors1[0] * brightness3 + staticBacklight * 1), colorCap(colors1[1] * brightness3 + staticBacklight), colorCap(colors1[2] * brightness3 + staticBacklight * 0.4));
-		}
-	}
-	
-}
-
-uint8_t colorCap(uint16_t givenColor) {
-  if (givenColor < 256) return givenColor;
-  else return 255;
-}
-
-uint16_t getStripStart(uint8_t stripNo) {
-	//Dynamically returns strip start for strip no. 'stripNo' - makes LEDSTRANG1_START etc obsolete.
-	return (LED_TOTAL/virtualStripCount)*(stripNo-1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:0 2:20 3:40
-}
-
-uint16_t getStripStart(uint8_t stripNo, uint8_t customStripCount) {
-	//Dynamically returns strip start for strip no. 'stripNo' - makes LEDSTRANG1_START etc obsolete.
-	return (LED_TOTAL/customStripCount)*(stripNo-1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:0 2:20 3:40
-}
-
-uint16_t getStripEnd(uint8_t stripNo) {
-	//Dynamically returns strip end for strip no. 'stripNo' - makes LEDSTRANG1_END etc obsolete.
-	return (getStripStart(stripNo+1) - 1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:19 2:39 3:59
-	//This forces getStripStart to calculate the start position of a none-existing strip **once** (the last call), so dont force impossible results to return -1!
-}
-
-uint16_t getStripEnd(uint8_t stripNo, uint8_t customStripCount) {
-	//Dynamically returns strip end for strip no. 'stripNo' - makes LEDSTRANG1_END etc obsolete.
-	return (getStripStart(stripNo+1, customStripCount) - 1); //Example: LED_TOTAL=60, virtualStripCount=3, Results: 1:19 2:39 3:59
-	//This forces getStripStart to calculate the start position of a none-existing strip **once** (the last call), so dont force impossible results to return -1!
-}
-
-uint16_t getStripMid(uint8_t stripNo) {
-	//Dynamically returns strip middle for strip no. 'stripNo' - makes LEDSTRANG1_HALF etc obsolete.
-	return getStripStart(stripNo) + (LED_TOTAL/virtualStripCount/2); 
-}
-
-
-//NEW: Central input management
-bool ProcessInput() {
-	switch(decodedInput) {
-		case 1: CycleVisual(); return true;
-		case 2: CyclePalette(); return true;
-		case 3: CycleBrightness(); return true;
-		case 4: /*CycleSelection();*/ return true; //Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
-		case 5: return true;
-		case 6: return true;
-		case 7: /*turnOff();*/ CycleSelection(); return true;
-		case 8: turnOn(); return true;
-		case 9: return true;
-		case 10: return true;
-		case 11: return true;
-		//...
-	}
-}
-
-
-
-// VISUAL EFFECT TO SHOW THAT A KEYSTROKE IS NOTICED.
-void showKeyRecieved() {
-	if (KEYRECIEVE_NOTIFICATION_TIME != 0)
-	{
-		for (int i = 1; i < strand.numPixels()-1; i++) {
-			strandReal.setPixelColor(i, strand.Color(0,0,0));
-		}
-		strandReal.setPixelColor(getStripStart(1, 3), strand.Color(0,255,0));
-		strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(0,255,0));
-		strandReal.setPixelColor(getStripStart(2, 3), strand.Color(0,255,0));
-		strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(0,255,0));
-		strandReal.setPixelColor(getStripStart(3, 3), strand.Color(0,255,0));
-		strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(0,255,0));
-		strandReal.show();
-		delay(KEYRECIEVE_NOTIFICATION_TIME);
-		for (int i = 0; i < strand.numPixels(); i++) {
-			strandReal.setPixelColor(i, strand.Color(0,0,0));
-		}
-		strandReal.show();
-	}
-
-}
-
-// VISUAL EFFECT TO SHOW THAT LISTENING TO IR STARTED (LEGACY AND NO LONGER NEEDED)
-/*void showIRisListening() {
-  for (int i = 1; i < strand.numPixels()-1; i++) {
-    strand.setPixelColor(i, strand.Color(0,0,0));
-  }
-  strand.setPixelColor(0, strand.Color(60,0,0));
-  strand.setPixelColor(strand.numPixels()-1, strand.Color(60,0,0));
-  strand.show();
-}*/
-
-// Methods to decode the input given by IRArdu
-void decodeInput() {
-	recevInput[0] = digitalRead(INPUT_PIN1); //Read the values from the PINs.
-  recevInput[1] = digitalRead(INPUT_PIN2);
-  recevInput[2] = digitalRead(INPUT_PIN3);
-	recevInput[3] = 0; //digitalRead(INPUT_PIN4);
-  recevInput[4] = 0; //digitalRead(INPUT_PIN5); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
-  if (SERIALDEBUGGING && (recevInput[0] || recevInput[1] || recevInput[2])) {Serial.print("Raw Input: "); Serial.print(recevInput[0]); Serial.print(recevInput[1]); Serial.println(recevInput[2]);}
-	decodedInput = 0;
-	for (int i = 0; i < INPUT_COUNT; i++) { //Decode the input.
-		if (recevInput[i])
-		{
-			decodedInput += (pow(2, i)+0.1); //Adds the equivalent number to the result. Pin1: +1, Pin2: +2, Pin3: +4, ...
-      if (SERIALDEBUGGING) {Serial.print("Input "); Serial.print(i); Serial.print(" is true, adding "); Serial.print(pow(2, i)); Serial.print(" to "); Serial.println(decodedInput);}
-		}
-	} 
-	
-	if (SERIALDEBUGGING && decodedInput != 0) {Serial.print("Decoded Input: "); Serial.println(decodedInput);}
-}
-
-
-//IMPORTANT: Delete this function  if you didn't use buttons./////////////////////////////////////////
-// void ToggleShuffle() {
-  // if (!digitalRead(BUTTON_3)) {
-
-    // shuffle = !shuffle; //This button's purpose: toggle shuffle mode.
-
-    /* This delay is to prevent the button from taking another reading while you're pressing it */
-    // delay(500);
-
-    /* Reset these things for a fresh experience. */
-    // maxVol = avgVol;
-    // avgBump = 0;
-  // }
-// }
-//////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 //Fades lights by multiplying them by a value between 0 and 1 each pass of loop().
