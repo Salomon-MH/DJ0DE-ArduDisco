@@ -68,6 +68,8 @@
 #define AUDIO_SAMLPING 255 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
 #define VISUALS   7 //Ammount of effects existing
 
+#define doublePressOn 5000 //maximum time between keypresses on "on" for settings mode
+
 //I have 3 LED strips which are all supposed to show the same effects.
 //I'm going to define where which strip starts and ends here so the Ardu only has to calculate the effects one time.
 //LEDSTRANG1 **has to** be the largest strang.
@@ -112,6 +114,10 @@ uint8_t virtualStripCount = 3; //Defines, how many times the vis should be copie
 uint8_t staticBacklight = 5;
 bool staticBacklightEnabled = true; //Defines a static backlight so the room is never completely dark
 bool shiftOneRight = false; //Shifts all strangs one to the right. So it is 3->1->2
+
+float lastsettingskeypress = 0; //Stores last press on "on" button for settings key.
+
+uint8_t powerstate = 0; //Power state. 0=Off, 1=On, 2=Settings
 
 //IMPORTANT:
 //  This array holds the "threshold" of each color function (i.e. the largest number they take before repeating).
@@ -199,89 +205,96 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 
   decodeInput(); //Decodes the input from binary to integer
 
-  //Record the volume level from the sound detector
-  volume = 0;
-  int volumetickcnt = 0;
-  while(!digitalRead(AUDIO_PIN) || volumetickcnt < AUDIO_SAMLPING) {
-    if(volume < AUDIO_SAMLPING && !digitalRead(AUDIO_PIN)) {
-      volume++;
-    } //else break;
-    volumetickcnt++;
+  if (powerstate == 1)
+  {
+	//Record the volume level from the sound detector
+	volume = 0;
+	int volumetickcnt = 0;
+	while(!digitalRead(AUDIO_PIN) || volumetickcnt < AUDIO_SAMLPING) {
+		if(volume < AUDIO_SAMLPING && !digitalRead(AUDIO_PIN)) {
+		volume++;
+		} //else break;
+		volumetickcnt++;
+	}
+
+	//Alternative method for recording. Isnt that fancy as the previous one though, so it's commented.
+	/*while(!digitalRead(AUDIO_PIN) && volume < 400) {
+			volume++;
+		}*/
+	//Would be a working frequency filter for the alternative recording method.
+	//This one interferes with the "bump" of the original code, so it's just nice to know that it works.
+	/*if (volume > 200 && volume < 300) {volume = volume;}
+	else volume = 0;*/
+
+  
+	//Serial.println(volume);
+  
+	//"Virtual" music for testing.
+	//volume = 12 + random(15);
+  
+	//brightness0 = analogRead(KNOB_PIN) / 1023.0; //Record how far the trimpot is twisted
+	//knob's default value is 1 now. Value of knob is defined by CycleBrightness()!!!
+
+	//Sets a threshold for volume.
+	//  In practice I've found noise can get up to 15, so if it's lower, the visual thinks it's silent.
+	//  Also if the volume is less than average volume / 2 (essentially an average with 0), it's considered silent.
+	if (volume < avgVol / 2.0 || volume < 15) volume = 0;
+
+	else avgVol = (avgVol + volume) / 2.0; //If non-zeo, take an "average" of volumes.
+
+	//If the current volume is larger than the loudest value recorded, overwrite
+	if (volume > maxVol) maxVol = volume;
+
+	//Check the Cycle* functions for specific instructions if you didn't include buttons in your design.
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	//CyclePalette();  //Changes palette for shuffle mode or button press.
+  
+	//CycleVisual();   //Changes visualization for shuffle mode or button press.
+
+	//ToggleShuffle(); //Toggles shuffle mode. Delete this if you didn't use buttons.
+  
+	//CycleBrightness();
+	ProcessInput(); //Calls specific functions depending on input given by IRArdu
+	isStaticLight = false; //Resets static light option.
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//This is where "gradient" is modulated to prevent overflow.
+	if (gradient > thresholds[palette]) {
+		gradient %= thresholds[palette] + 1;
+
+		//Everytime a palette gets completed is a good time to readjust "maxVol," just in case
+		//  the song gets quieter; we also don't want to lose brightness intensity permanently
+		//  because of one stray loud sound.
+		maxVol = (maxVol + volume) / 2.0;
+	}
+
+	//If there is a decent change in volume since the last pass, average it into "avgBump"
+	if (volume - last > 10) avgBump = (avgBump + (volume - last)) / 2.0;
+	
+	//If there is a notable change in volume, trigger a "bump"
+	//  avgbump is lowered just a little for comparing to make the visual slightly more sensitive to a beat.
+	bump = (volume - last > avgBump * .9);  
+
+	//If a "bump" is triggered, average the time between bumps
+	if (bump) {
+		avgTime = (((millis() / 1000.0) - timeBump) + avgTime) / 2.0;
+		timeBump = millis() / 1000.0;
+	}
+
+	Visualize();   //Calls the appropriate visualization to be displayed with the globals as they are.
+	controlBacklight();
+	CopyLEDContentAndApplyBrightness();
+	strandReal.show(); //This command actually shows the lights. NEW: Called here, not in the visualizations.
+  
+	gradient++;    //Increments gradient
+
+	last = volume; //Records current volume for next pass
+  } else if (powerstate == 0) {
+	  ProcessInput();
+  } else if (powerstate == 2) {
+	  settingsIndicate();
+	  ProcessInput();
   }
-
-  //Alternative method for recording. Isnt that fancy as the previous one though, so it's commented.
-  /*while(!digitalRead(AUDIO_PIN) && volume < 400) {
-        volume++;
-    }*/
-  //Would be a working frequency filter for the alternative recording method.
-  //This one interferes with the "bump" of the original code, so it's just nice to know that it works.
-  /*if (volume > 200 && volume < 300) {volume = volume;}
-  else volume = 0;*/
-
-  
-  //Serial.println(volume);
-  
-  //"Virtual" music for testing.
-  //volume = 12 + random(15);
-  
-  //brightness0 = analogRead(KNOB_PIN) / 1023.0; //Record how far the trimpot is twisted
-  //knob's default value is 1 now. Value of knob is defined by CycleBrightness()!!!
-
-  //Sets a threshold for volume.
-  //  In practice I've found noise can get up to 15, so if it's lower, the visual thinks it's silent.
-  //  Also if the volume is less than average volume / 2 (essentially an average with 0), it's considered silent.
-  if (volume < avgVol / 2.0 || volume < 15) volume = 0;
-
-  else avgVol = (avgVol + volume) / 2.0; //If non-zeo, take an "average" of volumes.
-
-  //If the current volume is larger than the loudest value recorded, overwrite
-  if (volume > maxVol) maxVol = volume;
-
-  //Check the Cycle* functions for specific instructions if you didn't include buttons in your design.
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
-  //CyclePalette();  //Changes palette for shuffle mode or button press.
-  
-  //CycleVisual();   //Changes visualization for shuffle mode or button press.
-
-  //ToggleShuffle(); //Toggles shuffle mode. Delete this if you didn't use buttons.
-  
-  //CycleBrightness();
-  ProcessInput(); //Calls specific functions depending on input given by IRArdu
-  isStaticLight = false; //Resets static light option.
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  //This is where "gradient" is modulated to prevent overflow.
-  if (gradient > thresholds[palette]) {
-    gradient %= thresholds[palette] + 1;
-
-    //Everytime a palette gets completed is a good time to readjust "maxVol," just in case
-    //  the song gets quieter; we also don't want to lose brightness intensity permanently
-    //  because of one stray loud sound.
-    maxVol = (maxVol + volume) / 2.0;
-  }
-
-  //If there is a decent change in volume since the last pass, average it into "avgBump"
-  if (volume - last > 10) avgBump = (avgBump + (volume - last)) / 2.0;
-
-  //If there is a notable change in volume, trigger a "bump"
-  //  avgbump is lowered just a little for comparing to make the visual slightly more sensitive to a beat.
-  bump = (volume - last > avgBump * .9);  
-
-  //If a "bump" is triggered, average the time between bumps
-  if (bump) {
-    avgTime = (((millis() / 1000.0) - timeBump) + avgTime) / 2.0;
-    timeBump = millis() / 1000.0;
-  }
-
-  Visualize();   //Calls the appropriate visualization to be displayed with the globals as they are.
-  controlBacklight();
-  CopyLEDContentAndApplyBrightness();
-  strandReal.show(); //This command actually shows the lights. NEW: Called here, not in the visualizations.
-  
-  gradient++;    //Increments gradient
-
-  last = volume; //Records current volume for next pass
-
   delay(30);     //Paces visuals so they aren't too fast to be enjoyable
 }
 
@@ -311,8 +324,8 @@ bool ProcessInput() {
       case 12: showKeyRecieved(); CycleVisual(); return true;
       case 13: setStaticColor(255, 100, 0); return true; //orange
       case 14: setStaticColor(150, 255, 255); return true; //bright aqua
-      case 15: LoadCustomColor(); return true; //custom color
-      case 16: showKeyRecieved(); ChangeRepCount(); return true;
+      case 15: LoadCustomColor(); return true; //custom color //TODO
+      case 16: showKeyRecieved(); ChangeRepCount(); return true; //TODO
       case 17: setStaticColor(255, 158, 94); return true; //bright orange
       case 18: setStaticColor(0, 255, 255); return true; //aqua
       case 19: setStaticColor(72, 0, 255); return true; //purple
@@ -324,30 +337,30 @@ bool ProcessInput() {
     }
   } else if (powerstate == 2) { //Settings mode
     switch(decodedInput) {
-      case 1: showKeyRecieved(); ChangeBacklightBrightness(2); return true;
-      case 2: showKeyRecieved(); ChangeBacklightBrightness(-2); return true;
+      case 1: showKeyRecieved(); ChangeBacklightBrightness(2); return true; //TODO
+      case 2: showKeyRecieved(); ChangeBacklightBrightness(-2); return true; //TODO
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
       case 5: showKeyRecieved(); ChangeStaticRed(5); return true;
       case 6: showKeyRecieved(); ChangeStaticGreen(5); return true;
       case 7: showKeyRecieved(); ChangeStaticBlue(5); return true;
-      case 8: showKeyRecieved(); LoadCustomColor(); return true;
+      case 8: showKeyRecieved(); LoadCustomColor(); return true; //TODO
       case 9: showKeyRecieved(); ChangeStaticRed(-5); return true;
       case 10: showKeyRecieved(); ChangeStaticGreen(-5); return true;
       case 11: showKeyRecieved(); ChangeStaticBlue(-5); return true;
-      case 12: showKeyRecieved(); SaveCustomColor(); return true;
+      case 12: showKeyRecieved(); SaveCustomColor(); return true; //TODO
       case 13: return false;
       case 14: return false;
       case 15: return false;
-      case 16: showKeyRecieved(); ToggleRightshift(); return true;
+      case 16: showKeyRecieved(); ToggleRightshift(); return true; //TODO
       case 17: return false;
       case 18: return false;
       case 19: return false;
-      case 20: showKeyRecieved(); SaveToEEPROM(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
+      case 20: showKeyRecieved(); SaveToEEPROM(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that //TODO
       case 21: return false;
       case 22: return false;
-      case 23: showKeyRecieved(); ToggleshowKeyRecieved(); return true;
-      case 24: showKeyRecieved(); delay(150); showKeyRecieved(); restoreDefaults(); return true;
+      case 23: showKeyRecieved(); ToggleshowKeyRecieved(); return true; //TODO
+      case 24: showKeyRecieved(); delay(150); showKeyRecieved(); restoreDefaults(); return true; //TODO
     }
   }
 }
@@ -453,16 +466,26 @@ void ChangeBrightness(double modifier) {
 }
 
 void turnOff() {
-  showKeyRecieved();
-    if(brightness0 == 0) brightness0 = 1;
-    else brightness0 = 0;
+  for (int i = 0; i < strand.numPixels(); i++) {
+      strandReal.setPixelColor(i, strand.Color(0,0,0));
+  }
+  strandReal.show();
+  powerstate = 0;
 }
 
 void turnOn() {
-  showKeyRecieved();
-    if(brightness0 == 0) brightness0 = 1;
-    else brightness0 = 0;
+  powerstate = 1;
 }
+
+void ToggleSettingsMode() {
+	if (powerstate == 2) powerstate = 1;
+	else {
+		float timenow = millis();
+		if (timenow-lastsettingskeypress > doublePressOn || lastsettingskeypress == 0) lastsettingskeypress = timenow;
+		else powerstate = 2;
+	}
+}
+
 
 void CycleSelection() {
   if (SERIALDEBUGGING) Serial.println("Switching selection!");
@@ -608,6 +631,29 @@ uint16_t getStripMid(uint8_t stripNo) {
   return getStripStart(stripNo) + (LED_TOTAL/virtualStripCount/2); 
 }
 
+
+// VISUAL EFFECT TO SHOW THAT A SETTINGS MODE IS ON.
+void settingsIndicate() {
+	
+  uint32_t col = strandReal.getPixelColor(0);
+  float colors[3]; //Array of the three RGB values
+  for (int j = 0; j < 3; j++) colors[j] = split(col, j);
+  
+  if (colors[0] == colors[1] == colors[2] == millis()%1000 == 0) {
+	strandReal.setPixelColor(getStripStart(1, 3), strand.Color(255, 0, 110));
+	strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(255, 0, 110));
+	strandReal.setPixelColor(getStripStart(2, 3), strand.Color(255, 0, 110));
+	strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(255, 0, 110));
+	strandReal.setPixelColor(getStripStart(3, 3), strand.Color(255, 0, 110));
+	strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(255, 0, 110));
+	strandReal.show();
+  } else {
+	for (int i = 1; i < strand.numPixels(); i++) {
+		strandReal.setPixelColor(i, strand.Color(0,0,0));
+	}
+	strandReal.show();
+  }
+}
 
 
 // VISUAL EFFECT TO SHOW THAT A KEYSTROKE IS NOTICED.
