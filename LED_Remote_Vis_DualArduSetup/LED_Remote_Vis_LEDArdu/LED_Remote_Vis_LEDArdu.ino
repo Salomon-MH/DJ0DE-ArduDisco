@@ -510,6 +510,17 @@ void ToggleshowKeyRecieved() {
 	shouldShowKeyRecieved = (shouldShowKeyRecieved? false : true);
 }
 
+//Changes the ammount of replications
+void ChangeRepCount() {
+	switch (virtualStripCount) {
+		case 1: virtualStripCount=3; break;
+		case 3: virtualStripCount=9; break;
+		case 9: virtualStripCount=27; break;
+		case 27: virtualStripCount=1; break;
+		default: virtualStripCount=1;
+	}
+}
+
 //Cycles selected strang for brightness control.
 void CycleSelection() {
   if (SERIALDEBUGGING) Serial.println("Switching selection!");
