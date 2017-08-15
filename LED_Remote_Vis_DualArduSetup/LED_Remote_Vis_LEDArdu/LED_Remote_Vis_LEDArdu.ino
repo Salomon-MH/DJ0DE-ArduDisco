@@ -464,15 +464,15 @@ void ChangeStaticRed(int givenvalue) {
 	if(staticRed < 0) {showInvalidFunction(); staticRed = 0;}
 	else if (staticRed > 255) {showInvalidFunction(); staticRed = 255;}
 }
-void ChangeStaticRed(int givenvalue) {
-	staticRed += givenvalue;
-	if(staticRed < 0) {showInvalidFunction(); staticRed = 0;}
-	else if (staticRed > 255) {showInvalidFunction(); staticRed = 255;}
+void ChangeStaticGreen(int givenvalue) {
+	staticGreen += givenvalue;
+	if(staticGreen < 0) {showInvalidFunction(); staticGreen = 0;}
+	else if (staticGreen > 255) {showInvalidFunction(); staticGreen = 255;}
 }
-void ChangeStaticRed(int givenvalue) {
-	staticRed += givenvalue;
-	if(staticRed < 0) {showInvalidFunction(); staticRed = 0;}
-	else if (staticRed > 255) {showInvalidFunction(); staticRed = 255;}
+void ChangeStaticBlue(int givenvalue) {
+	staticBlue += givenvalue;
+	if(staticBlue < 0) {showInvalidFunction(); staticBlue = 0;}
+	else if (staticBlue > 255) {showInvalidFunction(); staticBlue = 255;}
 }
 
 //Turns all lights and microphone detection off.
