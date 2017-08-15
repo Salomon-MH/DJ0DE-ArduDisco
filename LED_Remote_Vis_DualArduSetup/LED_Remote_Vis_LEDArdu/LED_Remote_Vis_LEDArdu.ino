@@ -63,7 +63,7 @@
 //Others
 #define LED_TOTAL 60  //Change this to the number of LEDs in your strand.
 #define LED_HALF  LED_TOTAL/2
-#define KEYRECIEVE_NOTIFICATION_TIME 100 //How long the white flash is shown after IR detected. 0 completely disables this fuction.
+#define KEYRECIEVE_NOTIFICATION_TIME 100 //How long the green flash is shown after IR detected. 0 completely disables this fuction.
 #define SERIALDEBUGGING 1 //Should serial send debugging information? 0=FALSE 1=TRUE
 #define AUDIO_SAMLPING 255 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
 #define VISUALS   7 //Ammount of effects existing
@@ -104,16 +104,21 @@ bool isStaticLight = false; //Different Color behavior for static light.
 uint8_t staticRed = 255; //Values for color for static light.
 uint8_t staticGreen = 255;
 uint8_t staticBlue = 255;
-uint8_t staticState = 0; //Value for current color state for static light.
+uint8_t staticStoredRed = 255; //Values for stored color for custom colors.
+uint8_t staticStoredGreen = 255;
+uint8_t staticStoredBlue = 255;
 float timeBacklightChanged = 0;
 bool negBacklightChange = true;
 
 uint8_t selectedStrip = 0;
 //bool isWholeVisualization = false; //OBSOLETE + UNUSED: Defines if strangs should be handled as one or as seperate ones
 uint8_t virtualStripCount = 3; //Defines, how many times the vis should be copied. Makes isWholeVisualization obsolete.
-uint8_t staticBacklight = 5;
-bool staticBacklightEnabled = true; //Defines a static backlight so the room is never completely dark
+
+uint8_t staticBacklight = 5; //Defines a static backlight so the room is never completely dark
+uint8_t maxStaticBacklight = 12;
+
 bool shiftOneRight = false; //Shifts all strangs one to the right. So it is 3->1->2
+bool shouldShowKeyRecieved = true; //Defines, if a green flash is displayed or not.
 
 float lastsettingskeypress = 0; //Stores last press on "on" button for settings key.
 
@@ -314,31 +319,31 @@ bool ProcessInput() {
       case 2: showKeyRecieved(); ChangeBrightness(-0.1); return true;
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
-      case 5: setStaticColor(255, 0, 0); return true; //Red
-      case 6: setStaticColor(0, 255, 0); return true; //Green
-      case 7: setStaticColor(0, 0, 255); return true; //Blue
-      case 8: setStaticColor(255, 255, 255); return true; //White
-      case 9: setStaticColor(255, 55, 0); return true; //redish orange
-      case 10: setStaticColor(50, 205, 50); return true; //lime
-      case 11: setStaticColor(0, 148, 255); return true; //ocean blue
+      case 5: delay(100); setStaticColor(255, 0, 0); return true; //Red
+      case 6: delay(100); setStaticColor(0, 255, 0); return true; //Green
+      case 7: delay(100); setStaticColor(0, 0, 255); return true; //Blue
+      case 8: delay(100); setStaticColor(255, 255, 255); return true; //White
+      case 9: delay(100); setStaticColor(255, 55, 0); return true; //redish orange
+      case 10: delay(100); setStaticColor(50, 205, 50); return true; //lime
+      case 11: delay(100); setStaticColor(0, 148, 255); return true; //ocean blue
       case 12: showKeyRecieved(); CycleVisual(); return true;
-      case 13: setStaticColor(255, 100, 0); return true; //orange
-      case 14: setStaticColor(150, 255, 255); return true; //bright aqua
-      case 15: LoadCustomColor(); return true; //custom color //TODO
+      case 13: delay(100); setStaticColor(255, 100, 0); return true; //orange
+      case 14: delay(100); setStaticColor(150, 255, 255); return true; //bright aqua
+      case 15: delay(100); LoadCustomColor(); return true; //custom color //TODO
       case 16: showKeyRecieved(); ChangeRepCount(); return true; //TODO
-      case 17: setStaticColor(255, 158, 94); return true; //bright orange
-      case 18: setStaticColor(0, 255, 255); return true; //aqua
-      case 19: setStaticColor(72, 0, 255); return true; //purple
+      case 17: delay(100); setStaticColor(255, 158, 94); return true; //bright orange
+      case 18: delay(100); setStaticColor(0, 255, 255); return true; //aqua
+      case 19: delay(100); setStaticColor(72, 0, 255); return true; //purple
       case 20: CycleSelection(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
-      case 21: setStaticColor(255, 216, 0); return true; //yellow
-      case 22: setStaticColor(0, 195, 255); return true; //dark aqua
-      case 23: setStaticColor(255, 0, 110); return true; //pink
+      case 21: delay(100); setStaticColor(255, 216, 0); return true; //yellow
+      case 22: delay(100); setStaticColor(0, 195, 255); return true; //dark aqua
+      case 23: delay(100); setStaticColor(255, 0, 110); return true; //pink
       case 24: showKeyRecieved(); CyclePalette(); return true;
     }
   } else if (powerstate == 2) { //Settings mode
     switch(decodedInput) {
-      case 1: showKeyRecieved(); ChangeBacklightBrightness(2); return true; //TODO
-      case 2: showKeyRecieved(); ChangeBacklightBrightness(-2); return true; //TODO
+      case 1: showKeyRecieved(); ChangeBacklightBrightness(1); return true; //TODO
+      case 2: showKeyRecieved(); ChangeBacklightBrightness(-1); return true; //TODO
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
       case 5: showKeyRecieved(); ChangeStaticRed(5); return true;
@@ -349,16 +354,16 @@ bool ProcessInput() {
       case 10: showKeyRecieved(); ChangeStaticGreen(-5); return true;
       case 11: showKeyRecieved(); ChangeStaticBlue(-5); return true;
       case 12: showKeyRecieved(); SaveCustomColor(); return true; //TODO
-      case 13: return false;
-      case 14: return false;
-      case 15: return false;
+      case 13: showInvalidFunction(); return false;
+      case 14: showInvalidFunction(); return false;
+      case 15: showInvalidFunction(); return false;
       case 16: showKeyRecieved(); ToggleRightshift(); return true; //TODO
-      case 17: return false;
-      case 18: return false;
-      case 19: return false;
+      case 17: showInvalidFunction(); return false;
+      case 18: showInvalidFunction(); return false;
+      case 19: showInvalidFunction(); return false;
       case 20: showKeyRecieved(); SaveToEEPROM(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that //TODO
-      case 21: return false;
-      case 22: return false;
+      case 21: showInvalidFunction(); return false;
+      case 22: showInvalidFunction(); return false;
       case 23: showKeyRecieved(); ToggleshowKeyRecieved(); return true; //TODO
       case 24: showKeyRecieved(); delay(150); showKeyRecieved(); restoreDefaults(); return true; //TODO
     }
@@ -370,24 +375,6 @@ void CyclePalette() {
 
     if (SERIALDEBUGGING) Serial.println("Changing Palette!");
     
-    if (isStaticLight) {
-    switch (staticState)
-    {
-    case 0: staticRed = 255; staticGreen = 0; staticBlue = 0; staticState = 1; break;//Switch to Red 1
-    case 1: staticRed = 0; staticGreen = 255; staticBlue = 0; staticState = 2; break;//Switch to Green 2
-    case 2: staticRed = 0; staticGreen = 0; staticBlue = 255; staticState = 3; break;//Switch to Blue 3
-    case 3: staticRed = 255; staticGreen = 100; staticBlue = 0; staticState = 4; break;//Switch to Orange 4
-    case 4: staticRed = 0; staticGreen = 255; staticBlue = 255; staticState = 5; break;//Switch to Aqua 5
-    case 5: staticRed = 72; staticGreen = 0; staticBlue = 255; staticState = 6; break;//Switch to Purple 6
-    case 6: staticRed = 255; staticGreen = 216; staticBlue = 0; staticState = 7; break;//Switch to Yellow 7
-    case 7: staticRed = 255; staticGreen = 0; staticBlue = 110; staticState = 8; break;//Switch to Pink 8
-    case 8: staticRed = 50; staticGreen = 205; staticBlue = 50; staticState = 9; break;//Switch to Lime 9
-    case 9: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
-    default: staticRed = 255; staticGreen = 255; staticBlue = 255; staticState = 0; break;//Switch to White 0
-    }
-    if (SERIALDEBUGGING) Serial.print("Switched static light to ");
-    if (SERIALDEBUGGING) Serial.println(staticState);
-  } else {
   
   palette++;  //change the color palette.
 
@@ -399,7 +386,7 @@ void CyclePalette() {
     gradient %= thresholds[palette]; //Modulate gradient to prevent any overflow that may occur.
 
     maxVol = avgVol;  //Set max volume to average for a fresh experience.
-  }
+  
 
 }
 
@@ -445,26 +432,50 @@ void ChangeBrightness(double modifier) {
     if (SERIALDEBUGGING) {Serial.print("Changing Brightness with factor "); Serial.print(modifier); Serial.print(" on stip == "); Serial.println(selectedStrip);}
   if (selectedStrip == 0) {
     brightness0 += modifier;
-    if (brightness0 > 1) brightness0 = 1;
-    else if (brightness0 < 0.1) brightness0 = 0.1;
+    if (brightness0 > 1) {showInvalidFunction(); brightness0 = 1;}
+    else if (brightness0 < 0.1) {showInvalidFunction(); brightness0 = 0.1;}
     
   } else if (selectedStrip == 1) {
     brightness1 += modifier;
-    if (brightness1 > 1) brightness1 = 1;
-    else if (brightness1 < 0.1) brightness1 = 0.1;
+    if (brightness1 > 1) {showInvalidFunction(); brightness1 = 1;}
+    else if (brightness1 < 0) {showInvalidFunction(); brightness1 = 0;}
     
   } else if (selectedStrip == 2) {
     brightness2 += modifier;
-    if (brightness2 > 1) brightness2 = 1;
-    else if (brightness2 < 0.1) brightness2 = 0.1;
+    if (brightness2 > 1) {showInvalidFunction(); brightness2 = 1;}
+    else if (brightness2 < 0) {showInvalidFunction(); brightness2 = 0;}
     
   } else if (selectedStrip == 3) {
     brightness3 += modifier;
-    if (brightness3 > 1) brightness3 = 1;
-    else if (brightness3 < 0.1) brightness3 = 0.1;
+    if (brightness3 > 1) {showInvalidFunction(); brightness3 = 1;}
+    else if (brightness3 < 0) {showInvalidFunction(); brightness3 = 0;}
   }
 }
 
+void ChangeBacklightBrightness(int modifier) {
+	maxStaticBacklight += modifier;
+	if(maxStaticBacklight < 0) {showInvalidFunction(); maxStaticBacklight = 0;}
+	else if (maxStaticBacklight > 255) {showInvalidFunction(); maxStaticBacklight = 255;}
+}
+
+//Methods to change the static color softly (for custom values)
+void ChangeStaticRed(int givenvalue) {
+	staticRed += givenvalue;
+	if(staticRed < 0) {showInvalidFunction(); staticRed = 0;}
+	else if (staticRed > 255) {showInvalidFunction(); staticRed = 255;}
+}
+void ChangeStaticRed(int givenvalue) {
+	staticRed += givenvalue;
+	if(staticRed < 0) {showInvalidFunction(); staticRed = 0;}
+	else if (staticRed > 255) {showInvalidFunction(); staticRed = 255;}
+}
+void ChangeStaticRed(int givenvalue) {
+	staticRed += givenvalue;
+	if(staticRed < 0) {showInvalidFunction(); staticRed = 0;}
+	else if (staticRed > 255) {showInvalidFunction(); staticRed = 255;}
+}
+
+//Turns all lights and microphone detection off.
 void turnOff() {
   for (int i = 0; i < strand.numPixels(); i++) {
       strandReal.setPixelColor(i, strand.Color(0,0,0));
@@ -473,10 +484,12 @@ void turnOff() {
   powerstate = 0;
 }
 
+//Turns system and all components on.
 void turnOn() {
   powerstate = 1;
 }
 
+//Toggles the settings mode when called twice in given time.
 void ToggleSettingsMode() {
 	if (powerstate == 2) powerstate = 1;
 	else {
@@ -486,7 +499,18 @@ void ToggleSettingsMode() {
 	}
 }
 
+//Toggles shifting the three virtual strangs once to the right.
+//WARNING: Currently disables custom per-strang-brightness too! You have to change the code at CopyLEDContentAndApplyBrightness() to prevent that.
+void ToggleRightshift() {
+	shiftOneRight = (shiftOneRight? false : true);
+}
 
+//Toggles, whether green indication light should be shown if a key is recieved.
+void ToggleshowKeyRecieved() {
+	shouldShowKeyRecieved = (shouldShowKeyRecieved? false : true);
+}
+
+//Cycles selected strang for brightness control.
 void CycleSelection() {
   if (SERIALDEBUGGING) Serial.println("Switching selection!");
   if (selectedStrip == 3) selectedStrip = 0;
@@ -494,6 +518,7 @@ void CycleSelection() {
   showSelected();
 }
 
+//Function to visualize which strang is currently selected for brightness change.
 void showSelected() {
   int strangstart = 0;
   int strangend = 0;
@@ -531,28 +556,34 @@ void showSelected() {
   }
 }
 
+//Smooth backlight control (dim up and down)
 void controlBacklight() {
-  //staticBacklight
   if (timeBacklightChanged+350 < millis()) {
     //uint8_t whattodo = random(2);
     timeBacklightChanged = millis();
+	
+	//e.g. from 7 to 12, from 10 to 17, from 0 to 2, ...
+	int minStaticBacklight = ((maxStaticBacklight>7)? (maxStaticBacklight-7) : 0);
+	
     if (!negBacklightChange) staticBacklight++;
     else staticBacklight--;
-    if (staticBacklight < 5) {staticBacklight = 5; negBacklightChange = false;}
-    else if (staticBacklight > 12) {staticBacklight = 12; negBacklightChange = true;}
+    if (staticBacklight < minStaticBacklight) {staticBacklight = minStaticBacklight; negBacklightChange = false;}
+    else if (staticBacklight > maxStaticBacklight) {staticBacklight = maxStaticBacklight; negBacklightChange = true;}
   }
 }
 
+//Copies visualitation to all "instances", applys custom brightness for the strangs and adds staticBacklight.
 void CopyLEDContentAndApplyBrightness() {
-  //Copy all content. Also applys staticBacklight.
+  //Copy all content, no matter which mode is on. Also applys staticBacklight.
   for(int i = 0; i < strand.numPixels(); i++)
     {
       //Retrieve the color at the current position.
       uint32_t col = strand.getPixelColor(i);
       float colors[3]; //Array of the three RGB values
       for (int j = 0; j < 3; j++) colors[j] = split(col, j);
-    
-      strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight * 1 ), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4));
+	  
+	  //Blue backlight pulled down to make the light warmer.
+      strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4)); 
     }
   
   if (virtualStripCount > 1) { //Copies the visualization to all 'instances'
@@ -591,7 +622,45 @@ void CopyLEDContentAndApplyBrightness() {
   
 }
 
+//loads custom static color to staticRed, staticGreen and staticBlue
+void LoadCustomColor() {
+	staticRed = staticStoredRed;
+	staticGreen = staticStoredGreen;
+	staticBlue = staticStoredBlue;
+}
 
+//saves custom static color to staticStoredRed, staticStoredGreen and staticStoredBlue
+void SaveCustomColor() {
+	staticStoredRed = staticRed;
+	staticStoredGreen = staticGreen;
+	staticStoredBlue = staticBlue;
+}
+
+//Restores all values to their defaults.
+void restoreDefaults() {
+	uint8_t visual = 0;
+
+	double brightness0 = 1;
+	double brightness1 = 1;
+	double brightness2 = 1;
+	double brightness3 = 1;
+
+	uint8_t staticRed = 255;
+	uint8_t staticGreen = 255;
+	uint8_t staticBlue = 255;
+	uint8_t staticStoredRed = 255;
+	uint8_t staticStoredGreen = 255;
+	uint8_t staticStoredBlue = 255;
+
+	uint8_t virtualStripCount = 3;
+	uint8_t maxStaticBacklight = 12;
+	bool shiftOneRight = false;
+	bool shouldShowKeyRecieved = true;
+}
+
+void SaveToEEPROM() {
+	//TODO
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -635,17 +704,18 @@ uint16_t getStripMid(uint8_t stripNo) {
 // VISUAL EFFECT TO SHOW THAT A SETTINGS MODE IS ON.
 void settingsIndicate() {
 	
+	
   uint32_t col = strandReal.getPixelColor(0);
   float colors[3]; //Array of the three RGB values
   for (int j = 0; j < 3; j++) colors[j] = split(col, j);
   
-  if (colors[0] == colors[1] == colors[2] == millis()%1000 == 0) {
-	strandReal.setPixelColor(getStripStart(1, 3), strand.Color(255, 0, 110));
-	strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(255, 0, 110));
-	strandReal.setPixelColor(getStripStart(2, 3), strand.Color(255, 0, 110));
-	strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(255, 0, 110));
-	strandReal.setPixelColor(getStripStart(3, 3), strand.Color(255, 0, 110));
-	strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(255, 0, 110));
+  if (colors[0] == colors[1] == colors[2] == 0 && millis()%2000 < 1300) {
+	strandReal.setPixelColor(getStripStart(1, 3), strand.Color(staticRed, staticGreen, staticBlue));
+	strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(staticRed, staticGreen, staticBlue));
+	strandReal.setPixelColor(getStripStart(2, 3), strand.Color(staticRed, staticGreen, staticBlue));
+	strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(staticRed, staticGreen, staticBlue));
+	strandReal.setPixelColor(getStripStart(3, 3), strand.Color(staticRed, staticGreen, staticBlue));
+	strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(staticRed, staticGreen, staticBlue));
 	strandReal.show();
   } else {
 	for (int i = 1; i < strand.numPixels(); i++) {
@@ -658,7 +728,7 @@ void settingsIndicate() {
 
 // VISUAL EFFECT TO SHOW THAT A KEYSTROKE IS NOTICED.
 void showKeyRecieved() {
-  if (KEYRECIEVE_NOTIFICATION_TIME != 0)
+  if (KEYRECIEVE_NOTIFICATION_TIME != 0 && shouldShowKeyRecieved)
   {
     for (int i = 1; i < strand.numPixels()-1; i++) {
       strandReal.setPixelColor(i, strand.Color(0,0,0));
@@ -676,7 +746,28 @@ void showKeyRecieved() {
     }
     strandReal.show();
   }
+}
 
+void showInvalidFunction() {
+  for (int i = 1; i < strand.numPixels()-1; i++) {
+	strandReal.setPixelColor(i, strand.Color(0,0,0));
+  }
+  for (int count = 0; count < 3; count++;)
+  {
+	  strandReal.setPixelColor(getStripStart(1, 3), strand.Color(255,0,0));
+	  strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(255,0,0));
+	  strandReal.setPixelColor(getStripStart(2, 3), strand.Color(255,0,0));
+	  strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(255,0,0));
+	  strandReal.setPixelColor(getStripStart(3, 3), strand.Color(255,0,0));
+	  strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(255,0,0));
+	  strandReal.show();
+	  delay(75);
+	  for (int i = 0; i < strand.numPixels(); i++) {
+		strandReal.setPixelColor(i, strand.Color(0,0,0));
+	  }
+	  strandReal.show();
+  }
+  
 }
 
 // VISUAL EFFECT TO SHOW THAT LISTENING TO IR STARTED (LEGACY AND NO LONGER NEEDED)
