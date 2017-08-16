@@ -93,7 +93,7 @@ Adafruit_NeoPixel strandReal = Adafruit_NeoPixel(LED_TOTAL, LED_PIN, NEO_GRB + N
 //LED Color
 uint16_t gradient = 0; //Used to iterate and loop through each color palette gradually
 uint8_t palette = 0;  //Holds the current color palette.
-uint8_t visual = 7;   //Holds the current visual being displayed.
+uint8_t visual = 0;   //Holds the current visual being displayed.
 float shuffleTime = 0;  //Holds how many seconds of runtime ago the last shuffle was (if shuffle mode is on).
 bool shuffle = false;  //Toggles shuffle mode.
 double brightness0 = 1;   //Used for adjusting the max brightness.
@@ -323,7 +323,7 @@ bool ProcessInput() {
       case 2: showKeyRecieved(); ChangeBrightness(-0.1); return true;
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
-      case 5: delay(100); setStaticColor(255, 0, 0); return true; //Red //TODO 
+      case 5: delay(100); setStaticColor(255, 0, 0); return true; //Red 
       case 6: delay(100); setStaticColor(0, 255, 0); return true; //Green
       case 7: delay(100); setStaticColor(0, 0, 255); return true; //Blue
       case 8: delay(100); setStaticColor(255, 255, 255); return true; //White
@@ -334,7 +334,7 @@ bool ProcessInput() {
       case 13: delay(100); setStaticColor(255, 100, 0); return true; //orange
       case 14: delay(100); setStaticColor(150, 255, 255); return true; //bright aqua
       case 15: delay(100); LoadCustomColor(); return true; //custom color //TODO
-      case 16: showKeyRecieved(); ChangeRepCount(); return true; //TODO //Note: For change of colors change to pulse or static light
+      case 16: showKeyRecieved(); ChangeRepCount(); return true;
       case 17: delay(100); setStaticColor(255, 158, 94); return true; //bright orange
       case 18: delay(100); setStaticColor(0, 255, 255); return true; //aqua
       case 19: delay(100); setStaticColor(72, 0, 255); return true; //purple
@@ -346,8 +346,8 @@ bool ProcessInput() {
     }
   } else if (powerstate == 2) { //Settings mode
     switch(decodedInput) {
-      case 1: showKeyRecieved(); ChangeBacklightBrightness(1); return true; //TODO
-      case 2: showKeyRecieved(); ChangeBacklightBrightness(-1); return true; //TODO
+      case 1: showKeyRecieved(); ChangeBacklightBrightness(1); return true;
+      case 2: showKeyRecieved(); ChangeBacklightBrightness(-1); return true;
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
       case 5: showKeyRecieved(); ChangeStaticRed(5); return true;
@@ -361,14 +361,14 @@ bool ProcessInput() {
       case 13: showInvalidFunction(); return false;
       case 14: showInvalidFunction(); return false;
       case 15: showInvalidFunction(); return false;
-      case 16: showKeyRecieved(); ToggleRightshift(); return true; //TODO
+      case 16: showKeyRecieved(); ToggleRightshift(); return true;
       case 17: showInvalidFunction(); return false;
       case 18: showInvalidFunction(); return false;
       case 19: showInvalidFunction(); return false;
-      case 20: showKeyRecieved(); SaveToEEPROM(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that //TODO
+      case 20: showKeyRecieved(); SaveToEEPROM(); return true; //TODO
       case 21: showInvalidFunction(); return false;
       case 22: showInvalidFunction(); return false;
-      case 23: showKeyRecieved(); ToggleshowKeyRecieved(); return true; //TODO
+      case 23: showKeyRecieved(); ToggleshowKeyRecieved(); return true;
       case 24: showKeyRecieved(); delay(150); showKeyRecieved(); restoreDefaults(); return true; //TODO
     }
   }
@@ -379,20 +379,20 @@ void CyclePalette() {
 
     if (SERIALDEBUGGING) Serial.println("Changing Palette!");
 
-    isStaticLight = false; //Resets static light option.
-  
-  palette++;  //change the color palette.
+    if (isStaticLight) {
+		isStaticLight = false; //Resets static light option.
+	} else {
+		palette++;  //change the color palette.
 
-    //If palette is larger than the population of thresholds[], start back at 0
-    //  This is why it's important you add a threshold to the array if you add a
-    //  palette, or the program will cylce back to Rainbow() before reaching it.
-    if (palette >= sizeof(thresholds) / 2) palette = 0;
+		//If palette is larger than the population of thresholds[], start back at 0
+		//  This is why it's important you add a threshold to the array if you add a
+		//  palette, or the program will cylce back to Rainbow() before reaching it.
+		if (palette >= sizeof(thresholds) / 2) palette = 0;
 
-    gradient %= thresholds[palette]; //Modulate gradient to prevent any overflow that may occur.
+		gradient %= thresholds[palette]; //Modulate gradient to prevent any overflow that may occur.
 
-    maxVol = avgVol;  //Set max volume to average for a fresh experience.
-  
-
+		maxVol = avgVol;  //Set max volume to average for a fresh experience.
+	}
 }
 
 void setStaticColor(uint8_t redval, uint8_t greenval, uint8_t blueval) {
@@ -828,7 +828,7 @@ void decodeInput() {
 //This function calls the appropriate visualization based on the value of "visual"
 void Visualize() {
   switch (visual) {
-    case 0: return Pulse();
+    case 0: return borderPulse();
     case 1: return PalettePulse();
     case 2: return Traffic();
     case 3: return Snake();
@@ -1311,12 +1311,32 @@ void LoopThrough() {
 
 
 
-/*void borderPulse() {
+void borderPulse() {
   int start = getStripMid(1) - (getStripMid(1) * (volume / maxVol));
   int finish = getStripMid(1) + (getStripMid(1) * (volume / maxVol)) + getStripEnd(1) % 2;
-  pulse();
-  //TODO: Move to the borders, I'm lazy.
-}*/
+  Pulse();
+  //getStripMid move to getStripEnd
+  
+  uint8_t arraysize = getStripEnd(1)+1;
+  float colors[arraysize][3]; //Array of all the three RGB values
+  
+  for (int i = 0; i < arraysize; i++) {
+	  uint32_t col = strand.getPixelColor(i);
+	  for (int j = 0; j < 3; j++) colors[i][j] = split(col, j);
+  }
+
+  for (int i = 0; i < arraysize; i++) {
+    strand.setPixelColor(i, 0, 0, 0);
+  }
+  
+  //getStripMid move to getStripEnd, so its getStripMid+getStripMid.
+  for (int ammouttomove = 0; ammouttomove < finish-start; ammouttomove++) {
+	  uint8_t currPos = start+ammouttomove+getStripMid(1); //prevents overflow.
+	  if (currPos > getStripEnd(1)) currPos -= getStripEnd(1);
+      strand.setPixelColor(currPos, colors[start+ammouttomove][0], colors[start+ammouttomove][1], colors[start+ammouttomove][2]); 
+  }
+  strand.show();
+}
 
 
 
