@@ -1318,6 +1318,7 @@ void LoopThrough() {
       double multiplier = pow(0.65, abs(i-(units/2)));
       if(isStaticLight) strand.setPixelColor(positions[i], strand.Color(staticRed*brightness0*multiplier,staticGreen*brightness0*multiplier,staticBlue*brightness0*multiplier));
       else {
+        if (bump) gradient += thresholds[palette] / 24;
         uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
         uint8_t colors[3];
         for (int k = 0; k < 3; k++) {
