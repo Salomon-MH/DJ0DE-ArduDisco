@@ -55,8 +55,8 @@
 
 #define INPUT_COUNT 5  //How many wires are conected for transmitting? Reading the values in the code has to be changed too when changing this!
 #define INPUT_PIN1  8  //The input pins from IRArdu to control the lights
-#define INPUT_PIN2  10  //WARNING: DO NOT FORGET TO CONNECT GROUNDS BETWEEN THE ARDUINOS.
-#define INPUT_PIN3  13
+#define INPUT_PIN2  9  //WARNING: DO NOT FORGET TO CONNECT GROUNDS BETWEEN THE ARDUINOS.
+#define INPUT_PIN3  10
 #define INPUT_PIN4  11
 #define INPUT_PIN5  12
 
@@ -93,7 +93,7 @@ Adafruit_NeoPixel strandReal = Adafruit_NeoPixel(LED_TOTAL, LED_PIN, NEO_GRB + N
 //LED Color
 uint16_t gradient = 0; //Used to iterate and loop through each color palette gradually
 uint8_t palette = 0;  //Holds the current color palette.
-uint8_t visual = 0;   //Holds the current visual being displayed.
+uint8_t visual = 7;   //Holds the current visual being displayed.
 float shuffleTime = 0;  //Holds how many seconds of runtime ago the last shuffle was (if shuffle mode is on).
 bool shuffle = false;  //Toggles shuffle mode.
 double brightness0 = 1;   //Used for adjusting the max brightness.
@@ -260,7 +260,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   
 	//CycleBrightness();
 	ProcessInput(); //Calls specific functions depending on input given by IRArdu
-	isStaticLight = false; //Resets static light option.
+	
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	//This is where "gradient" is modulated to prevent overflow.
@@ -295,6 +295,10 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 
 	last = volume; //Records current volume for next pass
   } else if (powerstate == 0) {
+    for (int i = 0; i < strandReal.numPixels(); i++) {
+      strandReal.setPixelColor(i, strand.Color(0,0,0));
+    }
+    strandReal.show();
 	  ProcessInput();
   } else if (powerstate == 2) {
 	  settingsIndicate();
@@ -319,7 +323,7 @@ bool ProcessInput() {
       case 2: showKeyRecieved(); ChangeBrightness(-0.1); return true;
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
-      case 5: delay(100); setStaticColor(255, 0, 0); return true; //Red
+      case 5: delay(100); setStaticColor(255, 0, 0); return true; //Red //TODO 
       case 6: delay(100); setStaticColor(0, 255, 0); return true; //Green
       case 7: delay(100); setStaticColor(0, 0, 255); return true; //Blue
       case 8: delay(100); setStaticColor(255, 255, 255); return true; //White
@@ -330,7 +334,7 @@ bool ProcessInput() {
       case 13: delay(100); setStaticColor(255, 100, 0); return true; //orange
       case 14: delay(100); setStaticColor(150, 255, 255); return true; //bright aqua
       case 15: delay(100); LoadCustomColor(); return true; //custom color //TODO
-      case 16: showKeyRecieved(); ChangeRepCount(); return true; //TODO
+      case 16: showKeyRecieved(); ChangeRepCount(); return true; //TODO //Note: For change of colors change to pulse or static light
       case 17: delay(100); setStaticColor(255, 158, 94); return true; //bright orange
       case 18: delay(100); setStaticColor(0, 255, 255); return true; //aqua
       case 19: delay(100); setStaticColor(72, 0, 255); return true; //purple
@@ -374,7 +378,8 @@ bool ProcessInput() {
 void CyclePalette() {
 
     if (SERIALDEBUGGING) Serial.println("Changing Palette!");
-    
+
+    isStaticLight = false; //Resets static light option.
   
   palette++;  //change the color palette.
 
@@ -392,6 +397,7 @@ void CyclePalette() {
 
 void setStaticColor(uint8_t redval, uint8_t greenval, uint8_t blueval) {
   isStaticLight = true;
+  if (visual != 0 && visual != 7) visual = 7;
   staticRed = redval;
   staticGreen = greenval;
   staticBlue = blueval;
@@ -456,6 +462,12 @@ void ChangeBacklightBrightness(int modifier) {
 	maxStaticBacklight += modifier;
 	if(maxStaticBacklight < 0) {showInvalidFunction(); maxStaticBacklight = 0;}
 	else if (maxStaticBacklight > 255) {showInvalidFunction(); maxStaticBacklight = 255;}
+
+ for (int i = 0; i < strandReal.numPixels(); i++) {
+     strandReal.setPixelColor(i, strand.Color(maxStaticBacklight,maxStaticBacklight,maxStaticBacklight));
+ }
+ strandReal.show();
+ delay(200);   
 }
 
 //Methods to change the static color softly (for custom values)
@@ -477,7 +489,7 @@ void ChangeStaticBlue(int givenvalue) {
 
 //Turns all lights and microphone detection off.
 void turnOff() {
-  for (int i = 0; i < strand.numPixels(); i++) {
+  for (int i = 0; i < strandReal.numPixels(); i++) {
       strandReal.setPixelColor(i, strand.Color(0,0,0));
   }
   strandReal.show();
@@ -487,6 +499,7 @@ void turnOff() {
 //Turns system and all components on.
 void turnOn() {
   powerstate = 1;
+  delay(100);
 }
 
 //Toggles the settings mode when called twice in given time.
@@ -515,8 +528,8 @@ void ChangeRepCount() {
 	switch (virtualStripCount) {
 		case 1: virtualStripCount=3; break;
 		case 3: virtualStripCount=9; break;
-		case 9: virtualStripCount=27; break;
-		case 27: virtualStripCount=1; break;
+		case 9: virtualStripCount=18; break;
+		case 18: virtualStripCount=1; break;
 		default: virtualStripCount=1;
 	}
 }
@@ -569,7 +582,7 @@ void showSelected() {
 
 //Smooth backlight control (dim up and down)
 void controlBacklight() {
-  if (timeBacklightChanged+350 < millis()) {
+  /*if (timeBacklightChanged+350 < millis()) {
     //uint8_t whattodo = random(2);
     timeBacklightChanged = millis();
 	
@@ -580,7 +593,8 @@ void controlBacklight() {
     else staticBacklight--;
     if (staticBacklight < minStaticBacklight) {staticBacklight = minStaticBacklight; negBacklightChange = false;}
     else if (staticBacklight > maxStaticBacklight) {staticBacklight = maxStaticBacklight; negBacklightChange = true;}
-  }
+  }*/
+  staticBacklight = maxStaticBacklight;
 }
 
 //Copies visualitation to all "instances", applys custom brightness for the strangs and adds staticBacklight.
@@ -630,7 +644,6 @@ void CopyLEDContentAndApplyBrightness() {
       strandReal.setPixelColor(getStripStart(3, 3)+i, colorCap(colors1[0] * brightness3 + staticBacklight * 1), colorCap(colors1[1] * brightness3 + staticBacklight), colorCap(colors1[2] * brightness3 + staticBacklight * 0.4));
     }
   }
-  
 }
 
 //loads custom static color to staticRed, staticGreen and staticBlue
@@ -715,12 +728,7 @@ uint16_t getStripMid(uint8_t stripNo) {
 // VISUAL EFFECT TO SHOW THAT A SETTINGS MODE IS ON.
 void settingsIndicate() {
 	
-	
-  uint32_t col = strandReal.getPixelColor(0);
-  float colors[3]; //Array of the three RGB values
-  for (int j = 0; j < 3; j++) colors[j] = split(col, j);
-  
-  if (colors[0] == colors[1] == colors[2] == 0 && millis()%2000 < 1300) {
+  if (millis()%2000 < 1300) {
 	strandReal.setPixelColor(getStripStart(1, 3), strand.Color(staticRed, staticGreen, staticBlue));
 	strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(staticRed, staticGreen, staticBlue));
 	strandReal.setPixelColor(getStripStart(2, 3), strand.Color(staticRed, staticGreen, staticBlue));
@@ -729,7 +737,7 @@ void settingsIndicate() {
 	strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(staticRed, staticGreen, staticBlue));
 	strandReal.show();
   } else {
-	for (int i = 1; i < strand.numPixels(); i++) {
+	for (int i = 0; i < strand.numPixels(); i++) {
 		strandReal.setPixelColor(i, strand.Color(0,0,0));
 	}
 	strandReal.show();
@@ -763,7 +771,7 @@ void showInvalidFunction() {
   for (int i = 1; i < strand.numPixels()-1; i++) {
 	strandReal.setPixelColor(i, strand.Color(0,0,0));
   }
-  for (int count = 0; count < 3; count++;)
+  for (int count = 0; count < 3; count++)
   {
 	  strandReal.setPixelColor(getStripStart(1, 3), strand.Color(255,0,0));
 	  strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(255,0,0));
@@ -796,8 +804,8 @@ void decodeInput() {
   recevInput[0] = digitalRead(INPUT_PIN1); //Read the values from the PINs.
   recevInput[1] = digitalRead(INPUT_PIN2);
   recevInput[2] = digitalRead(INPUT_PIN3);
-  recevInput[3] = 0; //digitalRead(INPUT_PIN4);
-  recevInput[4] = 0; //digitalRead(INPUT_PIN5); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
+  recevInput[3] = digitalRead(INPUT_PIN4);
+  recevInput[4] = digitalRead(INPUT_PIN5); //Add or remove lines if you want more transfer PINs from IRArdu to LEDArdu. With 3 7 values are possible, with 4 15, with 5 31, with 6 63 and so on.
   if (SERIALDEBUGGING && (recevInput[0] || recevInput[1] || recevInput[2])) {Serial.print("Raw Input: "); Serial.print(recevInput[0]); Serial.print(recevInput[1]); Serial.println(recevInput[2]);}
   decodedInput = 0;
   for (int i = 0; i < INPUT_COUNT; i++) { //Decode the input.
@@ -907,11 +915,24 @@ void Pulse() {
       // Take the average RGB value of the intended color and the existing color, for comparison
       uint8_t colors[3];
       float avgCol = 0, avgCol2 = 0;
-      for (int k = 0; k < 3; k++) {
-        colors[k] = split(col, k) * damp * brightness0 * pow(volume / maxVol, 2);
-        avgCol += colors[k];
-        avgCol2 += split(col2, k);
-      }
+	  if (!isStaticLight){
+		  for (int k = 0; k < 3; k++) {
+			colors[k] = split(col, k) * damp * brightness0 * pow(volume / maxVol, 2);
+			avgCol += colors[k];
+			avgCol2 += split(col2, k);
+		  }
+	  } else {
+     	  colors[0] = staticRed * damp * brightness0 * pow(volume / maxVol, 2);
+		  avgCol += colors[0];
+	      avgCol2 += split(col2, 0);
+		  colors[1] = staticGreen * damp * brightness0 * pow(volume / maxVol, 2);
+		  avgCol += colors[1];
+	      avgCol2 += split(col2, 1);
+		  colors[2] = staticBlue * damp * brightness0 * pow(volume / maxVol, 2);
+		  avgCol += colors[2];
+	      avgCol2 += split(col2, 2);
+	  }
+      
       avgCol /= 3.0, avgCol2 /= 3.0;
 
       //Compare the average colors as "brightness". Only overwrite dim colors so the fade effect is more apparent.
@@ -1250,9 +1271,23 @@ void Paintball() {
 // Provides a static light. SELFMADE.
 
 void StaticLight() {
-  isStaticLight = true;
-  for (int i = 0; i < getStripEnd(1)+1; i++) {
-    strand.setPixelColor(i, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
+  //isStaticLight = true;
+
+  if (isStaticLight) {
+    for (int i = 0; i < getStripEnd(1)+1; i++) {
+     strand.setPixelColor(i, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
+    }
+  }
+  
+  if (!isStaticLight) {
+    uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
+    uint8_t colors[3];
+    for (int k = 0; k < 3; k++) {
+      colors[k] = split(col, k);
+    }
+    for (int i = 0; i < getStripEnd(1)+1; i++) {
+      strand.setPixelColor(i, strand.Color(colors[0]*brightness0,colors[1]*brightness0,colors[2]*brightness0));
+    }
   }
   //strand.show();
 }
@@ -1273,6 +1308,15 @@ void LoopThrough() {
   delay(250);
   //strand.show();
 }
+
+
+
+/*void borderPulse() {
+  int start = getStripMid(1) - (getStripMid(1) * (volume / maxVol));
+  int finish = getStripMid(1) + (getStripMid(1) * (volume / maxVol)) + getStripEnd(1) % 2;
+  pulse();
+  //TODO: Move to the borders, I'm lazy.
+}*/
 
 
 
