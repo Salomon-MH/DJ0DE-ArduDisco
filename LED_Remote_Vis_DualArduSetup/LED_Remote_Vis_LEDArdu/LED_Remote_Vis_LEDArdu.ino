@@ -1335,7 +1335,7 @@ void LoopThrough() {
 	  strand.setPixelColor(ltcp2, strand.Color(staticRed*brightness0*0.2,staticGreen*brightness0*0.2,staticBlue*brightness0*0.2));*/
 
     loopthroughcounter++;
-    if(bump) loopthroughcounter += 2;
+    if(bump) loopthroughcounter++;
     
 	  if(loopthroughcounter > getStripEnd(1)) loopthroughcounter = 0;
 	  
