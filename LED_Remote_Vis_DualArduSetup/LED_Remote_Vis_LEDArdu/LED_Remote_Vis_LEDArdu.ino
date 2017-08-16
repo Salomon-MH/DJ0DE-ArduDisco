@@ -66,7 +66,7 @@
 #define KEYRECIEVE_NOTIFICATION_TIME 100 //How long the green flash is shown after IR detected. 0 completely disables this fuction.
 #define SERIALDEBUGGING 1 //Should serial send debugging information? 0=FALSE 1=TRUE
 #define AUDIO_SAMLPING 255 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
-#define VISUALS   7 //Ammount of effects existing
+#define VISUALS   9 //Ammount of effects existing
 
 #define doublePressOn 5000 //maximum time between keypresses on "on" for settings mode
 
@@ -174,6 +174,7 @@ float avgTime = 0;  //Holds the "average" amount of time between each "bump" (us
 
 //For LoopThrough() visual
 int loopthroughcounter = 0;
+float lastloopmove;
 
 //////////</Globals>
 
@@ -397,7 +398,7 @@ void CyclePalette() {
 
 void setStaticColor(uint8_t redval, uint8_t greenval, uint8_t blueval) {
   isStaticLight = true;
-  if (visual != 0 && visual != 7) visual = 7;
+  if (visual != 0 && visual != 1 && visual != 2 && visual != 9) visual = 9;
   staticRed = redval;
   staticGreen = greenval;
   staticBlue = blueval;
@@ -828,14 +829,16 @@ void decodeInput() {
 //This function calls the appropriate visualization based on the value of "visual"
 void Visualize() {
   switch (visual) {
-    case 0: return borderPulse();
-    case 1: return PalettePulse();
-    case 2: return Traffic();
-    case 3: return Snake();
-    case 4: return PaletteDance();
-    case 5: return Glitter();
-    case 6: return Paintball();
-    case 7: return StaticLight()/*LoopThrough()*/;
+    case 0: return Pulse();
+    case 1: return borderPulse();
+    case 2: return LoopThrough();
+    case 3: return PalettePulse();
+    case 4: return Traffic();
+    case 5: return Snake();
+    case 6: return PaletteDance();
+    case 7: return Glitter();
+    case 8: return Paintball();
+    case 9: return StaticLight();
     default: return Pulse();
   }
 }
@@ -1295,47 +1298,120 @@ void StaticLight() {
 ////////////////////////////////////////////////////////////
 ////////////////////    Loop through    ////////////////////
 ////////////////////////////////////////////////////////////
-// Cycle through all LEDs seperately. SELFMADE.
+// Cycle through all LEDs. SELFMADE.
 
 void LoopThrough() {
-  isStaticLight = true;
-  for (int i = 0; i < getStripEnd(1)+1; i++) {
-    strand.setPixelColor(i, strand.Color(0,0,0));
+	
+  fade(0.93);   //Listed below, this function simply dims the colors a little bit each pass of loop()
+  
+  if ((volume > 0 && bump) || millis() > lastloopmove+330) {
+    //virtualStripCount
+    uint8_t units = (getStripEnd(1)-getStripStart(1))/3 + units%2;
+    uint8_t positions[units];
+
+    for(int i = 0; i < units; i++) {
+      positions[i] = (loopthroughcounter+i > getStripEnd(1))? loopthroughcounter-getStripEnd(1)+i :  (loopthroughcounter+i);
+    }
+
+    // units/2 = 1, *0.65 each LED more away from middle.
+    for(int i = 0; i < units; i++) {
+      double multiplier = pow(0.65, abs(i-(units/2)));
+      if(isStaticLight) strand.setPixelColor(positions[i], strand.Color(staticRed*brightness0*multiplier,staticGreen*brightness0*multiplier,staticBlue*brightness0*multiplier));
+      else {
+        uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
+        uint8_t colors[3];
+        for (int k = 0; k < 3; k++) {
+           colors[k] = split(col, k);
+        }
+        strand.setPixelColor(positions[i], strand.Color(colors[0]*brightness0*multiplier,colors[1]*brightness0*multiplier,colors[2]*brightness0*multiplier));
+      }
+    }
+    
+	  /*strand.setPixelColor(ltcm2, strand.Color(staticRed*brightness0*0.2,staticGreen*brightness0*0.2,staticBlue*brightness0*0.2));
+	  strand.setPixelColor(ltcm1, strand.Color(staticRed*brightness0*0.5,staticGreen*brightness0*0.5,staticBlue*brightness0*0.5));
+	  strand.setPixelColor(loopthroughcounter, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
+	  strand.setPixelColor(ltcp1, strand.Color(staticRed*brightness0*0.5,staticGreen*brightness0*0.5,staticBlue*brightness0*0.5));
+	  strand.setPixelColor(ltcp2, strand.Color(staticRed*brightness0*0.2,staticGreen*brightness0*0.2,staticBlue*brightness0*0.2));*/
+
+    loopthroughcounter++;
+    if(bump) loopthroughcounter += 2;
+    
+	  if(loopthroughcounter > getStripEnd(1)) loopthroughcounter = 0;
+	  
+	  lastloopmove = millis();
   }
-  strand.setPixelColor(loopthroughcounter, strand.Color(staticRed*brightness0,staticGreen*brightness0,staticBlue*brightness0));
-  if(loopthroughcounter+1 > getStripEnd(1)) loopthroughcounter = 0;
-  else loopthroughcounter++;
-  delay(250);
-  //strand.show();
+  
 }
 
 
+////////////////////////////////////////////////////////////
+////////////////////    BORDER PULSE    ////////////////////
+////////////////////////////////////////////////////////////
+//Pulse from border of the strand towards the center, reversed Pulse(). SELFMADE.
 
 void borderPulse() {
-  int start = getStripMid(1) - (getStripMid(1) * (volume / maxVol));
-  int finish = getStripMid(1) + (getStripMid(1) * (volume / maxVol)) + getStripEnd(1) % 2;
-  Pulse();
-  //getStripMid move to getStripEnd
-  
-  uint8_t arraysize = getStripEnd(1)+1;
-  float colors[arraysize][3]; //Array of all the three RGB values
-  
-  for (int i = 0; i < arraysize; i++) {
-	  uint32_t col = strand.getPixelColor(i);
-	  for (int j = 0; j < 3; j++) colors[i][j] = split(col, j);
-  }
+  fade(0.75);   //Listed below, this function simply dims the colors a little bit each pass of loop()
 
-  for (int i = 0; i < arraysize; i++) {
-    strand.setPixelColor(i, 0, 0, 0);
+  //Advances the palette to the next noticeable color if there is a "bump"
+  if (bump) gradient += thresholds[palette] / 24;
+
+  //If it's silent, we want the fade effect to take over, hence this if-statement
+  if (volume > 0) {
+    uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
+
+    //These variables determine where to start and end the pulse since it starts from the middle of the strand.
+    //  The quantities are stored in variables so they only have to be computed once (plus we use them in the loop).
+    int start = getStripEnd(1) - (getStripMid(1) * (volume / maxVol));
+    int finish = getStripEnd(1) + (getStripMid(1) * (volume / maxVol)) + getStripEnd(1) % 2;
+    //Listed above, LED_HALF is simply half the number of LEDs on your strand. ? this part adjusts for an odd quantity.
+
+    for (int cnt = start; cnt < finish; cnt++) {
+      
+	  //If number too large begin at the beginning.
+	  int i = cnt;
+	  if (i > getStripEnd(1)) i -= (getStripEnd(1)+1);
+	  
+      //"damp" creates the fade effect of being dimmer the farther the pixel is from the center of the strand.
+      //  It returns a value between 0 and 1 that peaks at 1 at the center of the strand and 0 at the ends.
+      float damp = sin((i - start) * PI / float(finish - start));
+
+      //Squaring damp creates more distinctive brightness.
+      damp = pow(damp, 2.0);
+
+      //Fetch the color at the current pixel so we can see if it's dim enough to overwrite.
+      uint32_t col2 = strand.getPixelColor(i);
+
+      //Takes advantage of one for loop to do the following:
+      // Appropriatley adjust the brightness of this pixel using location, volume, and "knob"
+      // Take the average RGB value of the intended color and the existing color, for comparison
+      uint8_t colors[3];
+      float avgCol = 0, avgCol2 = 0;
+	  if (!isStaticLight){
+		  for (int k = 0; k < 3; k++) {
+			colors[k] = split(col, k) * damp * brightness0 * pow(volume / maxVol, 2);
+			avgCol += colors[k];
+			avgCol2 += split(col2, k);
+		  }
+	  } else {
+     	  colors[0] = staticRed * damp * brightness0 * pow(volume / maxVol, 2);
+		  avgCol += colors[0];
+	      avgCol2 += split(col2, 0);
+		  colors[1] = staticGreen * damp * brightness0 * pow(volume / maxVol, 2);
+		  avgCol += colors[1];
+	      avgCol2 += split(col2, 1);
+		  colors[2] = staticBlue * damp * brightness0 * pow(volume / maxVol, 2);
+		  avgCol += colors[2];
+	      avgCol2 += split(col2, 2);
+	  }
+      
+      avgCol /= 3.0, avgCol2 /= 3.0;
+
+      //Compare the average colors as "brightness". Only overwrite dim colors so the fade effect is more apparent.
+      if (avgCol > avgCol2) strand.setPixelColor(i, strand.Color(colors[0], colors[1], colors[2]));
+    }
   }
   
-  //getStripMid move to getStripEnd, so its getStripMid+getStripMid.
-  for (int ammouttomove = 0; ammouttomove < finish-start; ammouttomove++) {
-	  uint8_t currPos = start+ammouttomove+getStripMid(1); //prevents overflow.
-	  if (currPos > getStripEnd(1)) currPos -= getStripEnd(1);
-      strand.setPixelColor(currPos, colors[start+ammouttomove][0], colors[start+ammouttomove][1], colors[start+ammouttomove][2]); 
-  }
-  strand.show();
+  
 }
 
 
