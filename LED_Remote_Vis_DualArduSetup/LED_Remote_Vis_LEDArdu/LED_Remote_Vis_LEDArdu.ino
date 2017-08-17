@@ -608,8 +608,11 @@ void CopyLEDContentAndApplyBrightness() {
       float colors[3]; //Array of the three RGB values
       for (int j = 0; j < 3; j++) colors[j] = split(col, j);
 	  
-	  //Blue backlight pulled down to make the light warmer.
-      strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4)); 
+	    //Blue backlight pulled down to make the light warmer.
+      if (i <= getStripEnd(1, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness1 + staticBacklight), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4)); 
+      else if (i <= getStripEnd(2, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness2 + staticBacklight), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
+      else if (i <= getStripEnd(3, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness3 + staticBacklight), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
+      //strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4)); 
     }
   
   if (virtualStripCount > 1) { //Copies the visualization to all 'instances'
@@ -621,9 +624,10 @@ void CopyLEDContentAndApplyBrightness() {
       for (int j = 0; j < 3; j++) colors[j] = split(col, j);
         
       for (int stranginforloop = 1; stranginforloop <= virtualStripCount; stranginforloop++) {
-        if ((int)stranginforloop/3 <= 1) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
-        else if ((int)stranginforloop/3 == 2) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
-        else if ((int)stranginforloop/3 >= 3) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
+        //Serial.print(stranginforloop); Serial.print(" - "); Serial.println((int)stranginforloop/3);
+        if (stranginforloop <= virtualStripCount/3 *1) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
+        else if (stranginforloop <= virtualStripCount/3 *2) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
+        else if (stranginforloop <= virtualStripCount/3 *3) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
       }
     }
     
@@ -663,24 +667,24 @@ void SaveCustomColor() {
 
 //Restores all values to their defaults.
 void restoreDefaults() {
-	uint8_t visual = 0;
+	visual = 0;
 
-	double brightness0 = 1;
-	double brightness1 = 1;
-	double brightness2 = 1;
-	double brightness3 = 1;
+	brightness0 = 1;
+	brightness1 = 1;
+	brightness2 = 1;
+	brightness3 = 1;
 
-	uint8_t staticRed = 255;
-	uint8_t staticGreen = 255;
-	uint8_t staticBlue = 255;
-	uint8_t staticStoredRed = 255;
-	uint8_t staticStoredGreen = 255;
-	uint8_t staticStoredBlue = 255;
+	staticRed = 255;
+	staticGreen = 255;
+	staticBlue = 255;
+	staticStoredRed = 255;
+	staticStoredGreen = 255;
+	staticStoredBlue = 255;
 
-	uint8_t virtualStripCount = 3;
-	uint8_t maxStaticBacklight = 12;
-	bool shiftOneRight = false;
-	bool shouldShowKeyRecieved = true;
+	virtualStripCount = 3;
+	maxStaticBacklight = 12;
+	shiftOneRight = false;
+	shouldShowKeyRecieved = true;
 }
 
 void SaveToEEPROM() {
