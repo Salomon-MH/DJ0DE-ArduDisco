@@ -43,6 +43,7 @@
 
 //////////Libraries
 #include <Adafruit_NeoPixel.h>  //Library to simplify interacting with the LED strand
+#include <EEPROM.h> //Library to save settings on turnOff()
 #ifdef __AVR__
 //#include <avr/power.h>   //Includes the library for power reduction registers if your chip supports them. 
                          //More info: http://www.nongnu.org/avr-libc/user-manual/group__avr__power.htlm
@@ -69,6 +70,24 @@
 #define VISUALS   9 //Ammount of effects existing
 
 #define doublePressOn 5000 //maximum time between keypresses on "on" for settings mode
+
+//EEPROM addresses. One address holds a value from 0 to 255.
+#define EEPROM_visual 0 //visual[V]: 0-9, Max value: 009 [--V]
+#define EEPROM_virtualStripCountANDpalette 1 //Palette[P]: 0-5, virtualStripCount[V]: 1-18, Max value: 185 [VVP]
+#define EEPROM_brightness0 2 //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
+#define EEPROM_brightness1 3 //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
+#define EEPROM_brightness2 4 //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
+#define EEPROM_brightness3 5 //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
+#define EEPROM_maxStaticBacklight 6  //Brightness[B]: 0-255, Max value: 255 [BBB]
+#define EEPROM_shiftOneRightANDshouldShowKeyRecievedANDisStaticLight 7 //shiftOneRight[R]: 1-0, shouldShowKeyRecieved[K]: 1-0, isStaticLight[S]: 1-0 Max value: 111 [RKS]
+#define EEPROM_staticStoredRed 8 //Color[C]: 0-255, Max value: 255 [CCC]
+#define EEPROM_staticStoredGreen 9 //Color[C]: 0-255, Max value: 255 [CCC]
+#define EEPROM_staticStoredBlue 10 //Color[C]: 0-255, Max value: 255 [CCC]
+#define EEPROM_staticRed 11 //Color[C]: 0-255, Max value: 255 [CCC]
+#define EEPROM_staticGreen 12 //Color[C]: 0-255, Max value: 255 [CCC]
+#define EEPROM_staticBlue 13 //Color[C]: 0-255, Max value: 255 [CCC]
+
+
 
 //I have 3 LED strips which are all supposed to show the same effects.
 //I'm going to define where which strip starts and ends here so the Ardu only has to calculate the effects one time.
@@ -334,7 +353,7 @@ bool ProcessInput() {
       case 12: showKeyRecieved(); CycleVisual(); return true;
       case 13: delay(100); setStaticColor(255, 100, 0); return true; //orange
       case 14: delay(100); setStaticColor(150, 255, 255); return true; //bright aqua
-      case 15: delay(100); LoadCustomColor(); return true; //custom color //TODO
+      case 15: delay(100); LoadCustomColor(); return true; //custom color
       case 16: showKeyRecieved(); ChangeRepCount(); return true;
       case 17: delay(100); setStaticColor(255, 158, 94); return true; //bright orange
       case 18: delay(100); setStaticColor(0, 255, 255); return true; //aqua
@@ -354,11 +373,11 @@ bool ProcessInput() {
       case 5: showKeyRecieved(); ChangeStaticRed(5); return true;
       case 6: showKeyRecieved(); ChangeStaticGreen(5); return true;
       case 7: showKeyRecieved(); ChangeStaticBlue(5); return true;
-      case 8: showKeyRecieved(); LoadCustomColor(); return true; //TODO
+      case 8: showKeyRecieved(); LoadCustomColor(); return true;
       case 9: showKeyRecieved(); ChangeStaticRed(-5); return true;
       case 10: showKeyRecieved(); ChangeStaticGreen(-5); return true;
       case 11: showKeyRecieved(); ChangeStaticBlue(-5); return true;
-      case 12: showKeyRecieved(); SaveCustomColor(); return true; //TODO
+      case 12: showKeyRecieved(); SaveCustomColor(); return true;
       case 13: showInvalidFunction(); return false;
       case 14: showInvalidFunction(); return false;
       case 15: showInvalidFunction(); return false;
@@ -497,11 +516,13 @@ void turnOff() {
       strandReal.setPixelColor(i, strand.Color(0,0,0));
   }
   strandReal.show();
+  SaveToEEPROM();
   powerstate = 0;
 }
 
 //Turns system and all components on.
 void turnOn() {
+  LoadFromEEPROM();
   powerstate = 1;
   delay(100);
 }
@@ -672,6 +693,7 @@ void SaveCustomColor() {
 //Restores all values to their defaults.
 void restoreDefaults() {
 	visual = 0;
+  palette = 0;
 
 	brightness0 = 1;
 	brightness1 = 1;
@@ -692,7 +714,51 @@ void restoreDefaults() {
 }
 
 void SaveToEEPROM() {
-	//TODO
+	if (EEPROM.read(EEPROM_visual) != visual) EEPROM.write(EEPROM_visual, visual);
+  if (EEPROM.read(EEPROM_brightness0) != brightness0) EEPROM.write(EEPROM_brightness0, brightness0);
+  if (EEPROM.read(EEPROM_brightness1) != brightness1) EEPROM.write(EEPROM_brightness1, brightness1);
+  if (EEPROM.read(EEPROM_brightness2) != brightness2) EEPROM.write(EEPROM_brightness2, brightness2);
+  if (EEPROM.read(EEPROM_brightness3) != brightness3) EEPROM.write(EEPROM_brightness3, brightness3);
+  if (EEPROM.read(EEPROM_maxStaticBacklight) != maxStaticBacklight) EEPROM.write(EEPROM_maxStaticBacklight, maxStaticBacklight);
+
+  //Encode values: multiply with 10.
+  uint8_t shiftOneRightANDshouldShowKeyRecievedANDisStaticLight = (shiftOneRight*10 + shouldShowKeyRecieved)*10 + isStaticLight;
+  if (EEPROM.read(EEPROM_shiftOneRightANDshouldShowKeyRecievedANDisStaticLight) != shiftOneRightANDshouldShowKeyRecievedANDisStaticLight) EEPROM.write(EEPROM_shiftOneRightANDshouldShowKeyRecievedANDisStaticLight, shiftOneRightANDshouldShowKeyRecievedANDisStaticLight);
+  uint8_t virtualStripCountANDpalette = virtualStripCount*10 + palette;
+  if (EEPROM.read(EEPROM_virtualStripCountANDpalette) != virtualStripCountANDpalette) EEPROM.write(EEPROM_virtualStripCountANDpalette, virtualStripCountANDpalette);
+  
+  if (EEPROM.read(EEPROM_staticStoredRed) != staticStoredRed) EEPROM.write(EEPROM_staticStoredRed, staticStoredRed);
+  if (EEPROM.read(EEPROM_staticStoredGreen) != staticStoredGreen) EEPROM.write(EEPROM_staticStoredGreen, staticStoredGreen);
+  if (EEPROM.read(EEPROM_staticStoredBlue) != staticStoredBlue) EEPROM.write(EEPROM_staticStoredBlue, staticStoredBlue);
+  if (EEPROM.read(EEPROM_staticRed) != staticRed) EEPROM.write(EEPROM_staticRed, staticRed);
+  if (EEPROM.read(EEPROM_staticGreen) != staticGreen) EEPROM.write(EEPROM_staticGreen, staticGreen);
+  if (EEPROM.read(EEPROM_staticBlue) != staticBlue) EEPROM.write(EEPROM_staticBlue, staticBlue);
+}
+
+void LoadFromEEPROM() {
+  visual= EEPROM.read(EEPROM_visual);
+  brightness0= EEPROM.read(EEPROM_brightness0);
+  brightness1= EEPROM.read(EEPROM_brightness1);
+  brightness2= EEPROM.read(EEPROM_brightness2);
+  brightness3= EEPROM.read(EEPROM_brightness3);
+  maxStaticBacklight= EEPROM.read(EEPROM_maxStaticBacklight);
+
+  //Decode values: %10.
+  uint8_t shiftOneRightANDshouldShowKeyRecievedANDisStaticLight = EEPROM.read(EEPROM_shiftOneRightANDshouldShowKeyRecievedANDisStaticLight);
+  shiftOneRight = shiftOneRightANDshouldShowKeyRecievedANDisStaticLight / 100 % 10;
+  shouldShowKeyRecieved = shiftOneRightANDshouldShowKeyRecievedANDisStaticLight / 10 % 10;
+  isStaticLight = shiftOneRightANDshouldShowKeyRecievedANDisStaticLight % 10;
+
+  uint8_t virtualStripCountANDpalette = EEPROM.read(EEPROM_virtualStripCountANDpalette);
+  virtualStripCount = virtualStripCountANDpalette /10 %10;
+  palette = virtualStripCountANDpalette %10;
+  
+  staticStoredRed= EEPROM.read(EEPROM_staticStoredRed);
+  staticStoredGreen= EEPROM.read(EEPROM_staticStoredGreen);
+  staticStoredBlue= EEPROM.read(EEPROM_staticStoredBlue);
+  staticRed= EEPROM.read(EEPROM_staticRed);
+  staticGreen= EEPROM.read(EEPROM_staticGreen);
+  staticBlue= EEPROM.read(EEPROM_staticBlue);
 }
 
 
