@@ -473,16 +473,19 @@ void ChangeBacklightBrightness(int modifier) {
 
 //Methods to change the static color softly (for custom values)
 void ChangeStaticRed(int givenvalue) {
+  if(staticRed == 255 && staticGreen == 255 && staticBlue == 255) {staticRed = 0; staticGreen = 0; staticBlue = 0;}
 	staticRed += givenvalue;
 	if(staticRed < 0) {showInvalidFunction(); staticRed = 0;}
 	else if (staticRed > 255) {showInvalidFunction(); staticRed = 255;}
 }
 void ChangeStaticGreen(int givenvalue) {
+  if(staticRed == 255 && staticGreen == 255 && staticBlue == 255) {staticRed = 0; staticGreen = 0; staticBlue = 0;}
 	staticGreen += givenvalue;
 	if(staticGreen < 0) {showInvalidFunction(); staticGreen = 0;}
 	else if (staticGreen > 255) {showInvalidFunction(); staticGreen = 255;}
 }
 void ChangeStaticBlue(int givenvalue) {
+  if(staticRed == 255 && staticGreen == 255 && staticBlue == 255) {staticRed = 0; staticGreen = 0; staticBlue = 0;}
 	staticBlue += givenvalue;
 	if(staticBlue < 0) {showInvalidFunction(); staticBlue = 0;}
 	else if (staticBlue > 255) {showInvalidFunction(); staticBlue = 255;}
@@ -653,6 +656,7 @@ void CopyLEDContentAndApplyBrightness() {
 
 //loads custom static color to staticRed, staticGreen and staticBlue
 void LoadCustomColor() {
+  isStaticLight = true;
 	staticRed = staticStoredRed;
 	staticGreen = staticStoredGreen;
 	staticBlue = staticStoredBlue;
