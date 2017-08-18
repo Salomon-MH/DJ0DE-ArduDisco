@@ -66,7 +66,7 @@
 #define LED_HALF  LED_TOTAL/2
 #define KEYRECIEVE_NOTIFICATION_TIME 100 //How long the green flash is shown after IR detected. 0 completely disables this fuction.
 #define SERIALDEBUGGING 1 //Should serial send debugging information? 0=FALSE 1=TRUE
-#define AUDIO_SAMLPING 255 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
+#define AUDIO_SAMLPING 1023 //Audio sampling rate (For me 256 Bits is enough, 1024 Bits work good though too but is not necessary)
 #define VISUALS   9 //Ammount of effects existing
 
 #define doublePressOn 5000 //maximum time between keypresses on "on" for settings mode
@@ -247,6 +247,8 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 		volumetickcnt++;
 	}
 
+
+  
 	//Alternative method for recording. Isnt that fancy as the previous one though, so it's commented.
 	/*while(!digitalRead(AUDIO_PIN) && volume < 400) {
 			volume++;
@@ -268,7 +270,7 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 	//Sets a threshold for volume.
 	//  In practice I've found noise can get up to 15, so if it's lower, the visual thinks it's silent.
 	//  Also if the volume is less than average volume / 2 (essentially an average with 0), it's considered silent.
-	if (volume < avgVol / 2.0 || volume < 15) volume = 0;
+	if (volume < avgVol / 2.0/* || volume < 15*/) volume = 0;
 
 	else avgVol = (avgVol + volume) / 2.0; //If non-zeo, take an "average" of volumes.
 
@@ -1476,12 +1478,11 @@ void LoopThrough() {
   fade(0.93);   //Listed below, this function simply dims the colors a little bit each pass of loop()
   
   if ((volume > 0 && bump) || millis() > lastloopmove+330) {
-    //virtualStripCount
     uint8_t units = (getStripEnd(1)-getStripStart(1))/3 + units%2;
     uint8_t positions[units];
 
     for(int i = 0; i < units; i++) {
-      positions[i] = (loopthroughcounter+i > getStripEnd(1))? loopthroughcounter-getStripEnd(1)+i :  (loopthroughcounter+i);
+      positions[i] = (loopthroughcounter+i > getStripEnd(1))? loopthroughcounter-getStripEnd(1)-1+i :  (loopthroughcounter+i);
     }
 
     // units/2 = 1, *0.65 each LED more away from middle.
