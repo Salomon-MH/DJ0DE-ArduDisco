@@ -155,7 +155,7 @@ uint8_t powerstate = 0; //Power state. 0=Off, 1=On, 2=Settings
 //  keep "gradient" from overflowing, the color functions themselves can take any positive value. For example, the
 //  largest value Rainbow() takes before looping is 1529, so "gradient" should reset after 1529, as listed.
 //     Make sure you add/remove values accordingly if you add/remove a color function in the switch-case in ColorPalette().
-uint16_t thresholds[] = {1529, 1019, 764, 764, 764, 1274, 764};
+uint16_t thresholds[] = {1529, 1019, 764, 764, 764, 1274};
 
 //Sound
 uint8_t volume = 0;    //Holds the volume level read from the sound detector.
@@ -223,7 +223,6 @@ void setup() {    //Like it's named, this gets ran before any other function.
   digitalWrite(INPUT_PIN3, LOW);
   digitalWrite(INPUT_PIN4, LOW);
   digitalWrite(INPUT_PIN5, LOW);*/
-  timeBacklightChanged = millis();
   
   strand.begin(); //Initialize the LED strand object.
   strandReal.begin();
@@ -387,14 +386,14 @@ bool ProcessInput() {
       case 10: delay(100); setbacklightColor(50, 205, 50); return true; //lime /*showKeyRecieved(); ChangeStaticGreen(-5); return true;*/
       case 11: delay(100); setbacklightColor(0, 148, 255); return true; //ocean blue /*showKeyRecieved(); ChangeStaticBlue(-5); return true;*/
       case 13: delay(100); setbacklightColor(255, 100, 0); return true; //orange /*showInvalidFunction(); return false;*/
-      case 14: delay(100); setbacklightColor(150, 255, 255); PreviewBacklight(); return true; //bright aqua
+      case 14: delay(100); setbacklightColor(150, 255, 255); return true; //bright aqua
       case 15: delay(100); LoadCustomColorToBacklight(); return true; //custom color
-      case 17: delay(100); setbacklightColor(255, 158, 94); PreviewBacklight(); return true; //bright orange
-      case 18: delay(100); setbacklightColor(0, 255, 255); PreviewBacklight(); return true; //aqua
-      case 19: delay(100); setbacklightColor(255, 20, 147); PreviewBacklight(); return true; //deep pink
-      case 21: delay(100); setbacklightColor(255, 216, 0); PreviewBacklight(); return true; //yellow
-      case 22: delay(100); setbacklightColor(0, 195, 255); PreviewBacklight(); return true; //dark aqua
-      case 23: delay(100); setbacklightColor(255, 105, 180); PreviewBacklight(); return true; //hot pink
+      case 17: delay(100); setbacklightColor(255, 158, 94); return true; //bright orange
+      case 18: delay(100); setbacklightColor(0, 255, 255); return true; //aqua
+      case 19: delay(100); setbacklightColor(255, 20, 147); return true; //deep pink
+      case 21: delay(100); setbacklightColor(255, 216, 0); return true; //yellow
+      case 22: delay(100); setbacklightColor(0, 195, 255); return true; //dark aqua
+      case 23: delay(100); setbacklightColor(255, 105, 180); return true; //hot pink
 	  case 12: showKeyRecieved(); powerstate = 3; return true;								/*Side-button functions*/
 	  case 16: showKeyRecieved(); ToggleshowKeyRecieved(); return true;
 	  case 20: showKeyRecieved(); ToggleRightshift(); return true;
@@ -441,6 +440,7 @@ void setbacklightColor(uint8_t redval, uint8_t greenval, uint8_t blueval) {
   backlightR = redval;
   backlightG = greenval;
   backlightB = blueval;
+  PreviewBacklight();
 }
 
 void CycleVisual() {
@@ -711,6 +711,7 @@ void LoadCustomColorToBacklight() {
 	backlightR = staticStoredRed;
 	backlightG = staticStoredGreen;
 	backlightB = staticStoredBlue;
+  PreviewBacklight();
 }
 
 //saves custom static color to staticStoredRed, staticStoredGreen and staticStoredBlue
@@ -736,12 +737,20 @@ void stopColorFadePrev(uint8_t inputcfp) {
 		backlightG = colors[1];
 		backlightB = colors[2];
 	}
+
+  for (int cnt = 0; cnt < 6; cnt++) {
+    for (int i = 0; i < strandReal.numPixels(); i++) {
+      strandReal.setPixelColor(i, strand.Color(0,0,0));
+    }
+    strandReal.show();
+    delay(100);
+    for (int i = 0; i < strandReal.numPixels(); i++) {
+      strandReal.setPixelColor(i, strand.Color(colors[0]*0.6,colors[1]*0.6,colors[2]*0.6));
+    }
+    strandReal.show();
+    delay(100);
+  }
 	
-	for (int i = 0; i < strandReal.numPixels(); i++) {
-		strandReal.setPixelColor(i, strand.Color(colors[0]*0.6,colors[1]*0.6,colors[2]*0.6));
-	}
-	strandReal.show();
-	delay(1000);
 	
 	palette = prevpalette;
 	prevpalette = 0;
@@ -766,8 +775,8 @@ void restoreDefaults() {
 	staticStoredBlue = 255;
 
 	virtualStripCount = 3;
+  
 	staticBacklight = 0.01;
-	
 	backlightR = 255;
 	backlightG = 190;
 	backlightB = 110;
@@ -873,12 +882,12 @@ uint16_t getStripMid(uint8_t stripNo) {
 void settingsIndicate() {
 	
   if (millis()%2000 < 1300) {
-	strandReal.setPixelColor(getStripStart(1, 3), strand.Color(staticRed, staticGreen, staticBlue));
-	strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(staticRed, staticGreen, staticBlue));
-	strandReal.setPixelColor(getStripStart(2, 3), strand.Color(staticRed, staticGreen, staticBlue));
-	strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(staticRed, staticGreen, staticBlue));
-	strandReal.setPixelColor(getStripStart(3, 3), strand.Color(staticRed, staticGreen, staticBlue));
-	strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(staticRed, staticGreen, staticBlue));
+	strandReal.setPixelColor(getStripStart(1, 3), strand.Color(255, 20, 147));
+	strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(255, 20, 147));
+	strandReal.setPixelColor(getStripStart(2, 3), strand.Color(255, 20, 147));
+	strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(255, 20, 147));
+	strandReal.setPixelColor(getStripStart(3, 3), strand.Color(255, 20, 147));
+	strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(255, 20, 147));
 	strandReal.show();
   } else {
 	for (int i = 0; i < strand.numPixels(); i++) {
@@ -937,7 +946,9 @@ void showInvalidFunction() {
 void ColorFadePrev() {
 	//should be palette 0
 	if (palette != 0) {prevpalette = palette; palette = 0;}
-	
+
+  gradient += thresholds[palette] / 24 / 16;
+  
 	uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
 	uint8_t colors[3];
 	for (int k = 0; k < 3; k++) {
@@ -1023,7 +1034,6 @@ uint32_t ColorPalette(float num) {
     case 3: return (num < 0) ? PinaColada(gradient) : PinaColada(num);
     case 4: return (num < 0) ? Sulfur(gradient) : Sulfur(num);
     case 5: return (num < 0) ? NoGreen(gradient) : NoGreen(num);
-  case 6: return (num < 0) ? StaticGreen(gradient) : StaticGreen(num);
     default: return Rainbow(gradient);
   }
 }
@@ -1444,6 +1454,7 @@ void StaticLight() {
   }
   
   if (!isStaticLight) {
+    gradient += thresholds[palette] / 24 / 16;
     uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
     uint8_t colors[3];
     for (int k = 0; k < 3; k++) {
@@ -1720,15 +1731,5 @@ uint32_t NoGreen(unsigned int i) {
   return strand.Color(255, i, 0);                                     //red -> yellow
 }
 
-//NOTE: This is an example of a non-gradient palette: you will get straight red, white, or blue
-//      This works fine, but there is no gradient effect, this was merely included as an example.
-//      If you wish to include it, put it in the switch-case in ColorPalette() and add its
-//      threshold (764) to thresholds[] at the top.
-uint32_t StaticGreen(unsigned int i) {
-  if (i > 764) return StaticGreen(i % 765);
-  if (i > 509) return strand.Color(40, 255, 100);      //Extron-green
-  if (i > 255) return strand.Color(100, 255, 0);  //yellowish-green
-  return strand.Color(0, 255, 0);                   //green only
-}
 
 //////////</Palette Functions>
