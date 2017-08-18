@@ -78,7 +78,7 @@
 #define EEPROM_brightness1 3 //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
 #define EEPROM_brightness2 4 //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
 #define EEPROM_brightness3 5 //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
-#define EEPROM_maxStaticBacklight 6  //Brightness[B]: 0-255, Max value: 255 [BBB]
+#define EEPROM_staticBacklight 6  //Brightness[B]: 1.00-0.00, Max value: 100 [BBB]
 #define EEPROM_shiftOneRightANDshouldShowKeyRecievedANDisStaticLight 7 //shiftOneRight[R]: 1-0, shouldShowKeyRecieved[K]: 1-0, isStaticLight[S]: 1-0 Max value: 111 [RKS]
 #define EEPROM_staticStoredRed 8 //Color[C]: 0-255, Max value: 255 [CCC]
 #define EEPROM_staticStoredGreen 9 //Color[C]: 0-255, Max value: 255 [CCC]
@@ -86,7 +86,9 @@
 #define EEPROM_staticRed 11 //Color[C]: 0-255, Max value: 255 [CCC]
 #define EEPROM_staticGreen 12 //Color[C]: 0-255, Max value: 255 [CCC]
 #define EEPROM_staticBlue 13 //Color[C]: 0-255, Max value: 255 [CCC]
-
+#define EEPROM_backlightR 14 //Color[C]: 0-255, Max value: 255 [CCC]
+#define EEPROM_backlightG 15 //Color[C]: 0-255, Max value: 255 [CCC]
+#define EEPROM_backlightB 16 //Color[C]: 0-255, Max value: 255 [CCC]
 
 
 //I have 3 LED strips which are all supposed to show the same effects.
@@ -112,6 +114,7 @@ Adafruit_NeoPixel strandReal = Adafruit_NeoPixel(LED_TOTAL, LED_PIN, NEO_GRB + N
 //LED Color
 uint16_t gradient = 0; //Used to iterate and loop through each color palette gradually
 uint8_t palette = 0;  //Holds the current color palette.
+uint8_t prevpalette = 0;
 uint8_t visual = 0;   //Holds the current visual being displayed.
 float shuffleTime = 0;  //Holds how many seconds of runtime ago the last shuffle was (if shuffle mode is on).
 bool shuffle = false;  //Toggles shuffle mode.
@@ -126,15 +129,18 @@ uint8_t staticBlue = 255;
 uint8_t staticStoredRed = 255; //Values for stored color for custom colors.
 uint8_t staticStoredGreen = 255;
 uint8_t staticStoredBlue = 255;
-float timeBacklightChanged = 0;
-bool negBacklightChange = true;
+
+//float timeBacklightChanged = 0;
+//bool negBacklightChange = true;
 
 uint8_t selectedStrip = 0;
 //bool isWholeVisualization = false; //OBSOLETE + UNUSED: Defines if strangs should be handled as one or as seperate ones
 uint8_t virtualStripCount = 3; //Defines, how many times the vis should be copied. Makes isWholeVisualization obsolete.
 
-uint8_t staticBacklight = 5; //Defines a static backlight so the room is never completely dark
-uint8_t maxStaticBacklight = 12;
+double staticBacklight = 0.01; //Defines a static backlight so the room is never completely dark
+uint8_t backlightR = 255;
+uint8_t backlightG = 190;
+uint8_t backlightB = 110;
 
 bool shiftOneRight = false; //Shifts all strangs one to the right. So it is 3->1->2
 bool shouldShowKeyRecieved = true; //Defines, if a green flash is displayed or not.
@@ -307,7 +313,6 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
 	}
 
 	Visualize();   //Calls the appropriate visualization to be displayed with the globals as they are.
-	controlBacklight();
 	CopyLEDContentAndApplyBrightness();
 	strandReal.show(); //This command actually shows the lights. NEW: Called here, not in the visualizations.
   
@@ -323,7 +328,11 @@ void loop() {  //This is where the magic happens. This loop produces each frame 
   } else if (powerstate == 2) {
 	  settingsIndicate();
 	  ProcessInput();
-  }
+  } else if (powerstate == 3) {
+	  ColorFadePrev();
+	  ProcessInput();
+  } else powerstate = 0;
+  
   delay(30);     //Paces visuals so they aren't too fast to be enjoyable
 }
 
@@ -339,58 +348,63 @@ bool ProcessInput() {
   if (powerstate == 0 && decodedInput == 4) turnOn(); //If turned off, only on-button works.
   else if (powerstate == 1) { //Powered on in normal mode
     switch(decodedInput) {
-      case 1: showKeyRecieved(); ChangeBrightness(0.1); return true;
+      case 1: showKeyRecieved(); ChangeBrightness(0.1); return true;						/*Top row functions*/
       case 2: showKeyRecieved(); ChangeBrightness(-0.1); return true;
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
-      case 5: delay(100); setStaticColor(255, 0, 0); return true; //Red 
+      case 5: delay(100); setStaticColor(255, 0, 0); return true; //Red 					/*Color functions*/
       case 6: delay(100); setStaticColor(0, 255, 0); return true; //Green
       case 7: delay(100); setStaticColor(0, 0, 255); return true; //Blue
       case 8: delay(100); setStaticColor(255, 255, 255); return true; //White
       case 9: delay(100); setStaticColor(255, 55, 0); return true; //redish orange
       case 10: delay(100); setStaticColor(50, 205, 50); return true; //lime
       case 11: delay(100); setStaticColor(0, 148, 255); return true; //ocean blue
-      case 12: showKeyRecieved(); CycleVisual(); return true;
       case 13: delay(100); setStaticColor(255, 100, 0); return true; //orange
       case 14: delay(100); setStaticColor(150, 255, 255); return true; //bright aqua
       case 15: delay(100); LoadCustomColor(); return true; //custom color
-      case 16: showKeyRecieved(); ChangeRepCount(); return true;
       case 17: delay(100); setStaticColor(255, 158, 94); return true; //bright orange
       case 18: delay(100); setStaticColor(0, 255, 255); return true; //aqua
-      case 19: delay(100); setStaticColor(72, 0, 255); return true; //purple
-      case 20: CycleSelection(); return true;//Too many clicks after another might cause a stack overflow, but you have to be a total idiot to trigger that
+      case 19: delay(100); setStaticColor(255, 20, 147); return true; //deep pink
       case 21: delay(100); setStaticColor(255, 216, 0); return true; //yellow
       case 22: delay(100); setStaticColor(0, 195, 255); return true; //dark aqua
-      case 23: delay(100); setStaticColor(255, 0, 110); return true; //pink
+      case 23: delay(100); setStaticColor(255, 105, 180); return true; //hot pink
+	  case 12: showKeyRecieved(); CycleVisual(); return true;								/*Side-button functions*/
+	  case 16: showKeyRecieved(); ChangeRepCount(); return true;
+	  case 20: CycleSelection(); return true;
       case 24: showKeyRecieved(); CyclePalette(); return true;
     }
   } else if (powerstate == 2) { //Settings mode
     switch(decodedInput) {
-      case 1: showKeyRecieved(); ChangeBacklightBrightness(1); return true;
-      case 2: showKeyRecieved(); ChangeBacklightBrightness(-1); return true;
+      case 1: showKeyRecieved(); ChangeBacklightBrightness(0.01); return true;					/*Top row functions*/
+      case 2: showKeyRecieved(); ChangeBacklightBrightness(-0.01); return true;
       case 3: showKeyRecieved(); turnOff(); return true;
       case 4: showKeyRecieved(); ToggleSettingsMode(); return true;
-      case 5: showKeyRecieved(); ChangeStaticRed(5); return true;
-      case 6: showKeyRecieved(); ChangeStaticGreen(5); return true;
-      case 7: showKeyRecieved(); ChangeStaticBlue(5); return true;
-      case 8: showKeyRecieved(); LoadCustomColor(); return true;
-      case 9: showKeyRecieved(); ChangeStaticRed(-5); return true;
-      case 10: showKeyRecieved(); ChangeStaticGreen(-5); return true;
-      case 11: showKeyRecieved(); ChangeStaticBlue(-5); return true;
-      case 12: showKeyRecieved(); SaveCustomColor(); return true;
-      case 13: showInvalidFunction(); return false;
-      case 14: showInvalidFunction(); return false;
-      case 15: showInvalidFunction(); return false;
-      case 16: showKeyRecieved(); ToggleRightshift(); return true;
-      case 17: showInvalidFunction(); return false;
-      case 18: showInvalidFunction(); return false;
-      case 19: showInvalidFunction(); return false;
-      case 20: showKeyRecieved(); SaveToEEPROM(); return true; //TODO
-      case 21: showInvalidFunction(); return false;
-      case 22: showInvalidFunction(); return false;
-      case 23: showKeyRecieved(); ToggleshowKeyRecieved(); return true;
-      case 24: showKeyRecieved(); delay(150); showKeyRecieved(); restoreDefaults(); return true; //TODO
+      case 5: delay(100); setbacklightColor(255, 0, 0); return true; //Red  /*showKeyRecieved(); ChangeStaticRed(5); return true;*/						/*Color functions*/
+      case 6: delay(100); setbacklightColor(0, 255, 0); return true; //Green /*showKeyRecieved(); ChangeStaticGreen(5); return true;*/
+      case 7: delay(100); setbacklightColor(0, 0, 255); return true; //Blue /*showKeyRecieved(); ChangeStaticBlue(5); return true;*/
+      case 8: delay(100); setbacklightColor(255, 190, 110); return true; //Warm-White /*showKeyRecieved(); LoadCustomColor(); return true;*/
+      case 9: delay(100); setbacklightColor(255, 55, 0); return true; //redish orange /*showKeyRecieved(); ChangeStaticRed(-5); return true;*/
+      case 10: delay(100); setbacklightColor(50, 205, 50); return true; //lime /*showKeyRecieved(); ChangeStaticGreen(-5); return true;*/
+      case 11: delay(100); setbacklightColor(0, 148, 255); return true; //ocean blue /*showKeyRecieved(); ChangeStaticBlue(-5); return true;*/
+      case 13: delay(100); setbacklightColor(255, 100, 0); return true; //orange /*showInvalidFunction(); return false;*/
+      case 14: delay(100); setbacklightColor(150, 255, 255); PreviewBacklight(); return true; //bright aqua
+      case 15: delay(100); LoadCustomColorToBacklight(); return true; //custom color
+      case 17: delay(100); setbacklightColor(255, 158, 94); PreviewBacklight(); return true; //bright orange
+      case 18: delay(100); setbacklightColor(0, 255, 255); PreviewBacklight(); return true; //aqua
+      case 19: delay(100); setbacklightColor(255, 20, 147); PreviewBacklight(); return true; //deep pink
+      case 21: delay(100); setbacklightColor(255, 216, 0); PreviewBacklight(); return true; //yellow
+      case 22: delay(100); setbacklightColor(0, 195, 255); PreviewBacklight(); return true; //dark aqua
+      case 23: delay(100); setbacklightColor(255, 105, 180); PreviewBacklight(); return true; //hot pink
+	  case 12: showKeyRecieved(); powerstate = 3; return true;								/*Side-button functions*/
+	  case 16: showKeyRecieved(); ToggleshowKeyRecieved(); return true;
+	  case 20: showKeyRecieved(); ToggleRightshift(); return true;
+      case 24: showKeyRecieved(); delay(150); showKeyRecieved(); restoreDefaults(); SaveToEEPROM(); return true;
     }
+  } else if (powerstate == 3) { //ColorFadePrev mode
+	  if(decodedInput == 12) stopColorFadePrev(1);
+	  else if (decodedInput == 1 || decodedInput == 2) stopColorFadePrev(2);
+	  else if (decodedInput == 3) turnOff();
+	  else if (decodedInput > 0) powerstate = 2;
   }
 }
 
@@ -421,6 +435,12 @@ void setStaticColor(uint8_t redval, uint8_t greenval, uint8_t blueval) {
   staticRed = redval;
   staticGreen = greenval;
   staticBlue = blueval;
+}
+
+void setbacklightColor(uint8_t redval, uint8_t greenval, uint8_t blueval) {
+  backlightR = redval;
+  backlightG = greenval;
+  backlightB = blueval;
 }
 
 void CycleVisual() {
@@ -478,17 +498,21 @@ void ChangeBrightness(double modifier) {
   }
 }
 
-void ChangeBacklightBrightness(int modifier) {
-	maxStaticBacklight += modifier;
-	if(maxStaticBacklight < 0) {showInvalidFunction(); maxStaticBacklight = 0;}
-	else if (maxStaticBacklight > 255) {showInvalidFunction(); maxStaticBacklight = 255;}
-
- for (int i = 0; i < strandReal.numPixels(); i++) {
-     strandReal.setPixelColor(i, strand.Color(maxStaticBacklight,maxStaticBacklight,maxStaticBacklight));
- }
- strandReal.show();
- delay(200);   
+void ChangeBacklightBrightness(double modifier) {
+	staticBacklight += modifier;
+	if(staticBacklight < 0) {showInvalidFunction(); staticBacklight = 0;}
+	else if (staticBacklight > 1) {showInvalidFunction(); staticBacklight = 1;}
+	PreviewBacklight();
 }
+
+void PreviewBacklight() {
+	for (int i = 0; i < strandReal.numPixels(); i++) {
+     strandReal.setPixelColor(i, strand.Color(backlightR*staticBacklight,backlightG*staticBacklight,backlightB*staticBacklight));
+	}
+	strandReal.show();
+	delay(200);  
+}
+
 
 //Methods to change the static color softly (for custom values)
 void ChangeStaticRed(int givenvalue) {
@@ -605,9 +629,9 @@ void showSelected() {
   }
 }
 
-//Smooth backlight control (dim up and down)
-void controlBacklight() {
-  /*if (timeBacklightChanged+350 < millis()) {
+//Smooth backlight control (dim up and down) - DISABLED AND LEGACY.
+/*void controlBacklight() {
+  if (timeBacklightChanged+350 < millis()) {
     //uint8_t whattodo = random(2);
     timeBacklightChanged = millis();
 	
@@ -618,9 +642,9 @@ void controlBacklight() {
     else staticBacklight--;
     if (staticBacklight < minStaticBacklight) {staticBacklight = minStaticBacklight; negBacklightChange = false;}
     else if (staticBacklight > maxStaticBacklight) {staticBacklight = maxStaticBacklight; negBacklightChange = true;}
-  }*/
+  }
   staticBacklight = maxStaticBacklight;
-}
+}*/
 
 //Copies visualitation to all "instances", applys custom brightness for the strangs and adds staticBacklight.
 void CopyLEDContentAndApplyBrightness() {
@@ -633,9 +657,9 @@ void CopyLEDContentAndApplyBrightness() {
       for (int j = 0; j < 3; j++) colors[j] = split(col, j);
 	  
 	    //Blue backlight pulled down to make the light warmer.
-      if (i <= getStripEnd(1, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness1 + staticBacklight), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4)); 
-      else if (i <= getStripEnd(2, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness2 + staticBacklight), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
-      else if (i <= getStripEnd(3, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness3 + staticBacklight), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
+      if (i <= getStripEnd(1, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness1 + (backlightR*staticBacklight)), colorCap(colors[1] * brightness1 + (backlightG*staticBacklight)), colorCap(colors[2] * brightness1 + (backlightB*staticBacklight))); 
+      else if (i <= getStripEnd(2, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness2 + (backlightR*staticBacklight)), colorCap(colors[1] * brightness2 + (backlightG*staticBacklight)), colorCap(colors[2] * brightness2 + (backlightB*staticBacklight)));
+      else if (i <= getStripEnd(3, 3)) strandReal.setPixelColor(i, colorCap(colors[0] * brightness3 + (backlightR*staticBacklight)), colorCap(colors[1] * brightness3 + (backlightG*staticBacklight)), colorCap(colors[2] * brightness3 + (backlightB*staticBacklight)));
       //strandReal.setPixelColor(i, colorCap(colors[0] + staticBacklight), colorCap(colors[1] + staticBacklight), colorCap(colors[2] + staticBacklight * 0.4)); 
     }
   
@@ -649,9 +673,9 @@ void CopyLEDContentAndApplyBrightness() {
         
       for (int stranginforloop = 1; stranginforloop <= virtualStripCount; stranginforloop++) {
         //Serial.print(stranginforloop); Serial.print(" - "); Serial.println((int)stranginforloop/3);
-        if (stranginforloop <= virtualStripCount/3 *1) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness1 + staticBacklight * 1), colorCap(colors[1] * brightness1 + staticBacklight), colorCap(colors[2] * brightness1 + staticBacklight * 0.4));
-        else if (stranginforloop <= virtualStripCount/3 *2) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness2 + staticBacklight * 1), colorCap(colors[1] * brightness2 + staticBacklight), colorCap(colors[2] * brightness2 + staticBacklight * 0.4));
-        else if (stranginforloop <= virtualStripCount/3 *3) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness3 + staticBacklight * 1), colorCap(colors[1] * brightness3 + staticBacklight), colorCap(colors[2] * brightness3 + staticBacklight * 0.4));
+        if (stranginforloop <= virtualStripCount/3 *1) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness1 + (backlightR*staticBacklight)), colorCap(colors[1] * brightness1 + (backlightG*staticBacklight)), colorCap(colors[2] * brightness1 + (backlightB*staticBacklight)));
+        else if (stranginforloop <= virtualStripCount/3 *2) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness2 + (backlightR*staticBacklight)), colorCap(colors[1] * brightness2 + (backlightG*staticBacklight)), colorCap(colors[2] * brightness2 + (backlightB*staticBacklight)));
+        else if (stranginforloop <= virtualStripCount/3 *3) strandReal.setPixelColor(getStripStart(stranginforloop)+i, colorCap(colors[0] * brightness3 + (backlightR*staticBacklight)), colorCap(colors[1] * brightness3 + (backlightG*staticBacklight)), colorCap(colors[2] * brightness3 + (backlightB*staticBacklight)));
       }
     }
     
@@ -668,9 +692,9 @@ void CopyLEDContentAndApplyBrightness() {
       float colors3[3]; //Array of the three RGB values for strang 3
       for (int j = 0; j < 3; j++) colors3[j] = split(col3, j);
       
-      strandReal.setPixelColor(getStripStart(1, 3)+i, colorCap(colors2[0] * brightness1 + staticBacklight * 1), colorCap(colors2[1] * brightness1 + staticBacklight), colorCap(colors2[2] * brightness1 + staticBacklight * 0.4));
-      strandReal.setPixelColor(getStripStart(2, 3)+i, colorCap(colors3[0] * brightness2 + staticBacklight * 1), colorCap(colors3[1] * brightness2 + staticBacklight), colorCap(colors3[2] * brightness2 + staticBacklight * 0.4));
-      strandReal.setPixelColor(getStripStart(3, 3)+i, colorCap(colors1[0] * brightness3 + staticBacklight * 1), colorCap(colors1[1] * brightness3 + staticBacklight), colorCap(colors1[2] * brightness3 + staticBacklight * 0.4));
+      strandReal.setPixelColor(getStripStart(1, 3)+i, colorCap(colors2[0] * brightness1 + (backlightR*staticBacklight)), colorCap(colors2[1] * brightness1 + (backlightG*staticBacklight)), colorCap(colors2[2] * brightness1 + (backlightB*staticBacklight)));
+      strandReal.setPixelColor(getStripStart(2, 3)+i, colorCap(colors3[0] * brightness2 + (backlightR*staticBacklight)), colorCap(colors3[1] * brightness2 + (backlightG*staticBacklight)), colorCap(colors3[2] * brightness2 + (backlightB*staticBacklight)));
+      strandReal.setPixelColor(getStripStart(3, 3)+i, colorCap(colors1[0] * brightness3 + (backlightR*staticBacklight)), colorCap(colors1[1] * brightness3 + (backlightG*staticBacklight)), colorCap(colors1[2] * brightness3 + (backlightB*staticBacklight)));
     }
   }
 }
@@ -683,11 +707,45 @@ void LoadCustomColor() {
 	staticBlue = staticStoredBlue;
 }
 
+void LoadCustomColorToBacklight() {
+	backlightR = staticStoredRed;
+	backlightG = staticStoredGreen;
+	backlightB = staticStoredBlue;
+}
+
 //saves custom static color to staticStoredRed, staticStoredGreen and staticStoredBlue
 void SaveCustomColor() {
 	staticStoredRed = staticRed;
 	staticStoredGreen = staticGreen;
 	staticStoredBlue = staticBlue;
+}
+
+void stopColorFadePrev(uint8_t inputcfp) {
+	uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
+	uint8_t colors[3];
+	for (int k = 0; k < 3; k++) {
+		colors[k] = split(col, k);
+	}
+	
+	if (inputcfp == 1) {
+		staticStoredRed = colors[0];
+		staticStoredGreen = colors[1];
+		staticStoredBlue = colors[2];
+	} else if (inputcfp == 2) {
+		backlightR = colors[0];
+		backlightG = colors[1];
+		backlightB = colors[2];
+	}
+	
+	for (int i = 0; i < strandReal.numPixels(); i++) {
+		strandReal.setPixelColor(i, strand.Color(colors[0]*0.6,colors[1]*0.6,colors[2]*0.6));
+	}
+	strandReal.show();
+	delay(1000);
+	
+	palette = prevpalette;
+	prevpalette = 0;
+	powerstate = 2;
 }
 
 //Restores all values to their defaults.
@@ -708,18 +766,23 @@ void restoreDefaults() {
 	staticStoredBlue = 255;
 
 	virtualStripCount = 3;
-	maxStaticBacklight = 12;
+	staticBacklight = 0.01;
+	
+	backlightR = 255;
+	backlightG = 190;
+	backlightB = 110;
+	
 	shiftOneRight = false;
 	shouldShowKeyRecieved = true;
 }
 
 void SaveToEEPROM() {
-	if (EEPROM.read(EEPROM_visual) != visual) EEPROM.write(EEPROM_visual, visual);
-  if (EEPROM.read(EEPROM_brightness0) != brightness0) EEPROM.write(EEPROM_brightness0, brightness0);
-  if (EEPROM.read(EEPROM_brightness1) != brightness1) EEPROM.write(EEPROM_brightness1, brightness1);
-  if (EEPROM.read(EEPROM_brightness2) != brightness2) EEPROM.write(EEPROM_brightness2, brightness2);
-  if (EEPROM.read(EEPROM_brightness3) != brightness3) EEPROM.write(EEPROM_brightness3, brightness3);
-  if (EEPROM.read(EEPROM_maxStaticBacklight) != maxStaticBacklight) EEPROM.write(EEPROM_maxStaticBacklight, maxStaticBacklight);
+  if (EEPROM.read(EEPROM_visual) != visual) EEPROM.write(EEPROM_visual, visual);
+  if (EEPROM.read(EEPROM_brightness0) != brightness0*100) EEPROM.write(EEPROM_brightness0, brightness0*100);
+  if (EEPROM.read(EEPROM_brightness1) != brightness1*100) EEPROM.write(EEPROM_brightness1, brightness1*100);
+  if (EEPROM.read(EEPROM_brightness2) != brightness2*100) EEPROM.write(EEPROM_brightness2, brightness2*100);
+  if (EEPROM.read(EEPROM_brightness3) != brightness3*100) EEPROM.write(EEPROM_brightness3, brightness3*100);
+  if (EEPROM.read(EEPROM_staticBacklight) != staticBacklight*100) EEPROM.write(EEPROM_staticBacklight, staticBacklight*100);
 
   //Encode values: multiply with 10.
   uint8_t shiftOneRightANDshouldShowKeyRecievedANDisStaticLight = (shiftOneRight*10 + shouldShowKeyRecieved)*10 + isStaticLight;
@@ -733,15 +796,18 @@ void SaveToEEPROM() {
   if (EEPROM.read(EEPROM_staticRed) != staticRed) EEPROM.write(EEPROM_staticRed, staticRed);
   if (EEPROM.read(EEPROM_staticGreen) != staticGreen) EEPROM.write(EEPROM_staticGreen, staticGreen);
   if (EEPROM.read(EEPROM_staticBlue) != staticBlue) EEPROM.write(EEPROM_staticBlue, staticBlue);
+  if (EEPROM.read(EEPROM_backlightR) != backlightR) EEPROM.write(EEPROM_backlightR, backlightR);
+  if (EEPROM.read(EEPROM_backlightG) != backlightG) EEPROM.write(EEPROM_backlightG, backlightG);
+  if (EEPROM.read(EEPROM_backlightB) != backlightB) EEPROM.write(EEPROM_backlightB, backlightB);
 }
 
 void LoadFromEEPROM() {
   visual= EEPROM.read(EEPROM_visual);
-  brightness0= EEPROM.read(EEPROM_brightness0);
-  brightness1= EEPROM.read(EEPROM_brightness1);
-  brightness2= EEPROM.read(EEPROM_brightness2);
-  brightness3= EEPROM.read(EEPROM_brightness3);
-  maxStaticBacklight= EEPROM.read(EEPROM_maxStaticBacklight);
+  brightness0= (double)EEPROM.read(EEPROM_brightness0)*1.0 / 100;
+  brightness1= (double)EEPROM.read(EEPROM_brightness1)*1.0 / 100;
+  brightness2= (double)EEPROM.read(EEPROM_brightness2)*1.0 / 100;
+  brightness3= (double)EEPROM.read(EEPROM_brightness3)*1.0 / 100;
+  staticBacklight= (double)EEPROM.read(EEPROM_staticBacklight)*1.0 / 100;
 
   //Decode values: %10.
   uint8_t shiftOneRightANDshouldShowKeyRecievedANDisStaticLight = EEPROM.read(EEPROM_shiftOneRightANDshouldShowKeyRecievedANDisStaticLight);
@@ -759,6 +825,9 @@ void LoadFromEEPROM() {
   staticRed= EEPROM.read(EEPROM_staticRed);
   staticGreen= EEPROM.read(EEPROM_staticGreen);
   staticBlue= EEPROM.read(EEPROM_staticBlue);
+  backlightR= EEPROM.read(EEPROM_backlightR);
+  backlightG= EEPROM.read(EEPROM_backlightG);
+  backlightB= EEPROM.read(EEPROM_backlightB);
 }
 
 
@@ -862,6 +931,24 @@ void showInvalidFunction() {
 	  strandReal.show();
   }
   
+}
+
+//rainbow color preview.
+void ColorFadePrev() {
+	//should be palette 0
+	if (palette != 0) {prevpalette = palette; palette = 0;}
+	
+	uint32_t col = ColorPalette(-1); //Our retrieved 32-bit color
+	uint8_t colors[3];
+	for (int k = 0; k < 3; k++) {
+		colors[k] = split(col, k);
+	}
+	
+	for (int i = 0; i < strandReal.numPixels(); i++) {
+		strandReal.setPixelColor(i, strand.Color(colors[0]*0.6,colors[1]*0.6,colors[2]*0.6));
+	}
+	strandReal.show();
+
 }
 
 // VISUAL EFFECT TO SHOW THAT LISTENING TO IR STARTED (LEGACY AND NO LONGER NEEDED)
