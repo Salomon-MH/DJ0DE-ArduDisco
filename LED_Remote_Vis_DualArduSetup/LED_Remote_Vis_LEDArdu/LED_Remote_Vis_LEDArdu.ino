@@ -880,7 +880,9 @@ uint16_t getStripMid(uint8_t stripNo) {
 
 // VISUAL EFFECT TO SHOW THAT A SETTINGS MODE IS ON.
 void settingsIndicate() {
-	
+	for (int i = 0; i < strand.numPixels(); i++) {
+    strandReal.setPixelColor(i, strand.Color(0,0,0));
+  }
   if (millis()%2000 < 1300) {
 	strandReal.setPixelColor(getStripStart(1, 3), strand.Color(255, 20, 147));
 	strandReal.setPixelColor(getStripEnd(1, 3), strand.Color(255, 20, 147));
@@ -888,13 +890,10 @@ void settingsIndicate() {
 	strandReal.setPixelColor(getStripEnd(2, 3), strand.Color(255, 20, 147));
 	strandReal.setPixelColor(getStripStart(3, 3), strand.Color(255, 20, 147));
 	strandReal.setPixelColor(getStripEnd(3, 3), strand.Color(255, 20, 147));
+  } 
+  
 	strandReal.show();
-  } else {
-	for (int i = 0; i < strand.numPixels(); i++) {
-		strandReal.setPixelColor(i, strand.Color(0,0,0));
-	}
-	strandReal.show();
-  }
+  
 }
 
 
