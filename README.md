@@ -13,5 +13,5 @@ If you have any ideas on how to improove my code i'd really appreciate your idea
 
 
 # Credits
-I used cyborg5's IRLib2 as infrared recieving library from https://github.com/cyborg5/IRLib2 and Adafruit_NeoPixel as LED library which can be found at https://github.com/adafruit/Adafruit_NeoPixel.
-The basic code for some of the "disco" effects is forked from https://github.com/bartlettmic/SparkFun-RGB-LED-Music-Sound-Visualizer-Arduino-Code.
+I used [cyborg5's IRLib2](https://github.com/cyborg5/IRLib2) as infrared recieving library and [Adafruit_NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel) as LED library.
+The basic code for some of the "disco" effects is forked from [SparkFun's RGB LED Music Sound Visualizer Arduino Code](https://github.com/bartlettmic/SparkFun-RGB-LED-Music-Sound-Visualizer-Arduino-Code).
